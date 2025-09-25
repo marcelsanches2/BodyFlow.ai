@@ -7,7 +7,9 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app.core.config import Config
+from app.core.channels import ChannelConfig
 from app.api.v1.whatsapp import whatsapp_router
+from app.api.v1.telegram import telegram_router
 from app.services.memory import memory_manager
 
 # Importa endpoints de teste apenas se habilitados
@@ -43,9 +45,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Inclui rotas do WhatsApp
-# Inclui routers
-app.include_router(whatsapp_router)  # Endpoints de produção
+# Inclui routers baseado no canal ativo
+if ChannelConfig.is_whatsapp_active():
+    app.include_router(whatsapp_router)
+    logger.info("✅ Canal WhatsApp ativo")
+elif ChannelConfig.is_telegram_active():
+    app.include_router(telegram_router)
+    logger.info("✅ Canal Telegram ativo")
 
 # Inclui endpoints de teste apenas se habilitados
 if TEST_ENDPOINTS_ENABLED:
