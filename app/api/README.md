@@ -12,9 +12,7 @@ app/api/
 │   ├── test_endpoints.py # Implementação dos endpoints de teste
 │   └── README.md       # Documentação dos endpoints de teste
 └── v1/                 # Versão 1 da API
-    ├── whatsapp.py      # Endpoints de produção do WhatsApp
-    ├── whatsapp_old.py  # Backup do arquivo antigo
-    └── whatsapp_production.py # Backup do arquivo de produção
+    └── whatsapp.py      # Endpoints de produção do WhatsApp
 ```
 
 ## 🚀 Endpoints Disponíveis
