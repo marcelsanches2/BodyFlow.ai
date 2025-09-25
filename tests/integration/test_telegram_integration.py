@@ -6,7 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 from unittest.mock import patch, AsyncMock
 from app.main import app
-from app.utils.messages import UserMessages
+# UserMessages removido - será substituído pela nova orquestração
 
 client = TestClient(app)
 
@@ -49,18 +49,15 @@ class TestTelegramIntegration:
             mock_memory.get_user_history = AsyncMock(return_value=[]) # Sem histórico
             mock_memory.save_message = AsyncMock(return_value=True) # Mock assíncrono
             
-            # Mock do bodyflow_graph
-            with patch('app.api.v1.telegram.bodyflow_graph') as mock_graph:
-                mock_graph.processar_mensagem = AsyncMock(return_value="Resposta do agente")
+            # Mock removido - nova orquestração será implementada
+            
+            # Mock do telegram_bot
+            with patch('app.api.v1.telegram.telegram_bot', None):
+                response = client.post("/telegram/", json=webhook_data)
                 
-                # Mock do telegram_bot
-                with patch('app.api.v1.telegram.telegram_bot', None):
-                    
-                    response = client.post("/telegram/", json=webhook_data)
-                    
-                    assert response.status_code == 200
-                    data = response.json()
-                    assert data["status"] == "ok"
+                assert response.status_code == 200
+                data = response.json()
+                assert data["status"] == "ok"
 
     def test_telegram_webhook_with_user_not_found(self):
         """Testa webhook do Telegram com usuário não encontrado"""

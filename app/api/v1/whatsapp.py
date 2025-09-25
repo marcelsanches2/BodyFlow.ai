@@ -10,9 +10,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import Response
 from twilio.twiml.messaging_response import MessagingResponse
-from app.graph import bodyflow_graph
 from app.services.memory import memory_manager
-from app.utils.messages import UserMessages
 import logging
 
 # Configuração de logging
@@ -33,27 +31,8 @@ async def webhook_whatsapp(request: Request):
         
         logger.info(f"Mensagem recebida de {from_number}: {message_body}")
         
-        # Verifica se o usuário está cadastrado e ativo
-        user = await memory_manager.get_user_by_phone(from_number)
-        
-        if not user:
-            # Usuário não cadastrado - oferece cadastro
-            resposta = UserMessages.WELCOME_NOT_REGISTERED
-        elif not user.get("is_active"):
-            # Usuário cadastrado mas não ativo - apenas informa
-            resposta = UserMessages.ACCOUNT_INACTIVE
-        else:
-            # Usuário ativo - processa normalmente
-            
-            # Checa histórico ANTES de registrar a mensagem atual
-            historico_antes = await memory_manager.get_user_history(from_number, limit=1)
-            
-            resposta = await bodyflow_graph.processar_mensagem(from_number, message_body)
-            
-            # Saúda o usuário no primeiro contato (sem histórico prévio)
-            if not historico_antes:
-                saudacao = UserMessages.FIRST_CONTACT_GREETING
-                resposta = f"{saudacao}\n\n{resposta}"
+        # Resposta simples temporária - será substituída pela nova orquestração
+        resposta = "Ola! BodyFlow em reconstrucao. Nova versao em breve!"
         
         # Limpa a resposta para compatibilidade com WhatsApp
         resposta_limpa = _clean_message_for_whatsapp(resposta)

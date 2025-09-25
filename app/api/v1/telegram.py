@@ -14,9 +14,7 @@ import json
 # Ajusta o sys.path para permitir imports relativos
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from app.graph import bodyflow_graph
 from app.services.memory import memory_manager
-from app.utils.messages import UserMessages
 from app.core.config import Config
 from app.core.channels import ChannelConfig
 
@@ -161,28 +159,8 @@ async def telegram_webhook(request: Request):
         
         logger.info(f"📱 Processando mensagem do Telegram - Chat: {chat_id}, Usuário: {username or first_name}, Mensagem: {message_text}")
         
-        # Verifica se o usuário está cadastrado e ativo
-        user = await memory_manager.get_user_by_phone(chat_id)  # Usa chat_id como identificador
-        
-        if not user:
-            # Usuário não cadastrado - oferece cadastro
-            resposta = UserMessages.WELCOME_NOT_REGISTERED
-        elif not user.get("is_active"):
-            # Usuário cadastrado mas não ativo - apenas informa
-            resposta = UserMessages.ACCOUNT_INACTIVE
-        else:
-            # Usuário ativo - processa normalmente
-            
-            # Checa histórico ANTES de registrar a mensagem atual
-            historico_antes = await memory_manager.get_user_history(chat_id, limit=1)
-            
-            # Processa a mensagem com o grafo de agentes
-            resposta = await bodyflow_graph.processar_mensagem(chat_id, message_text)
-            
-            # Saúda o usuário no primeiro contato (sem histórico prévio)
-            if not historico_antes:
-                saudacao = UserMessages.FIRST_CONTACT_GREETING
-                resposta = f"{saudacao}\n\n{resposta}"
+        # Resposta simples temporária - será substituída pela nova orquestração
+        resposta = "Ola! BodyFlow em reconstrucao. Nova versao em breve!"
         
         # Limpa a mensagem para o Telegram
         resposta_limpa = _clean_message_for_telegram(resposta)
