@@ -12,8 +12,8 @@ from app.services.memory import memory_manager
 
 # Importa endpoints de teste apenas se habilitados
 try:
-    from app.api.v1.test.test_endpoints import test_router
-    from app.api.v1.test.config import TestConfig
+    from app.api.test.test_endpoints import test_router
+    from app.api.test.config import TestConfig
     TEST_ENDPOINTS_ENABLED = TestConfig.ENABLE_TEST_ENDPOINTS
 except ImportError:
     TEST_ENDPOINTS_ENABLED = False

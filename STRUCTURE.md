@@ -18,10 +18,13 @@ bodyflow-backend/
 │   │   └── memory.py               # ✅ Gerenciamento de memória/Supabase
 │   │
 │   ├── 📁 api/                      # Endpoints da API
-│   │   ├── __init__.py
+│   │   ├── README.md               # ✅ Documentação da API
+│   │   ├── test/                   # ✅ Endpoints de teste e debug
+│   │   │   ├── config.py           # ✅ Configuração dos endpoints de teste
+│   │   │   ├── test_endpoints.py   # ✅ Implementação dos endpoints de teste
+│   │   │   └── README.md           # ✅ Documentação dos endpoints de teste
 │   │   └── v1/                     # Versão 1 da API
-│   │       ├── __init__.py
-│   │       └── whatsapp.py         # ✅ Endpoints do WhatsApp
+│   │       └── whatsapp.py         # ✅ Endpoints de produção do WhatsApp
 │   │
 │   ├── 📁 agents/                   # Agentes de IA
 │   │   ├── __init__.py
@@ -45,19 +48,26 @@ bodyflow-backend/
 - **`utils/`**: Utilitários e mensagens
 - **`services/`**: Lógica de negócio
 - **`api/`**: Endpoints organizados por versão
+  - **`test/`**: Endpoints de teste e debug
+  - **`v1/`**: Versão 1 da API
 - **`agents/`**: Agentes especializados
 
 ### ✅ **Escalabilidade**
 - Estrutura preparada para crescimento
 - Fácil adição de novos agentes
 - Versionamento de API (v1, v2, etc.)
+- Endpoints de teste separados da produção
+- Configuração flexível para desenvolvimento/produção
 - Separação clara entre camadas
 
 ### ✅ **Manutenibilidade**
 - Código organizado por funcionalidade
 - Fácil localização de componentes
+- Endpoints de teste isolados
+- Documentação específica para cada versão
 - Imports organizados e claros
 - Estrutura profissional
+- **Limpeza visual** - Arquivos `__init__.py` removidos
 
 ## 🔄 Mudanças Realizadas
 
@@ -67,6 +77,11 @@ bodyflow-backend/
 3. `memory.py` → `app/services/memory.py`
 4. `whatsapp.py` → `app/api/v1/whatsapp.py`
 
+### **Endpoints Separados**
+1. **Produção**: `app/api/v1/whatsapp.py` - Endpoints limpos para produção
+2. **Teste**: `app/api/test/` - Endpoints de teste e debug
+3. **Configuração**: `app/api/test/config.py` - Controle de habilitação
+
 ### **Imports Atualizados**
 - ✅ `app/main.py` - Atualizado para nova estrutura
 - ✅ `app/graph.py` - Imports corrigidos
@@ -75,12 +90,10 @@ bodyflow-backend/
 - ✅ `app/agents/treino.py` - Imports corrigidos
 - ✅ `app/agents/dieta.py` - Imports corrigidos
 
-### **Arquivos `__init__.py` Criados**
-- ✅ `app/core/__init__.py`
-- ✅ `app/utils/__init__.py`
-- ✅ `app/services/__init__.py`
-- ✅ `app/api/__init__.py`
-- ✅ `app/api/v1/__init__.py`
+### **Arquivos `__init__.py` Removidos**
+- ❌ `app/api/__init__.py` - Removido para limpeza visual
+- ❌ `app/api/v1/__init__.py` - Removido para limpeza visual
+- ❌ `app/api/test/__init__.py` - Removido para limpeza visual
 
 ## 🚀 Como Usar a Nova Estrutura
 
@@ -97,6 +110,17 @@ from app.utils.messages import UserMessages
 ### **Importar Serviços**
 ```python
 from app.services.memory import memory_manager
+```
+
+### **Importar Endpoints de Produção**
+```python
+from app.api.v1.whatsapp import whatsapp_router
+```
+
+### **Importar Endpoints de Teste**
+```python
+from app.api.test.test_endpoints import test_router
+from app.api.test.config import TestConfig
 ```
 
 ### **Importar Agentes**
