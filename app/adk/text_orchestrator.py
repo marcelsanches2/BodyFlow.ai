@@ -269,7 +269,7 @@ Depois disso, poderei criar planos de treino e dieta totalmente personalizados p
                     "agent_name": "suporte",
                     "response": """🤝 **Como posso te ajudar?**
 
-Sou seu Super Personal Trainer e posso te auxiliar com:
+Posso te auxiliar com:
 
 🏃‍♂️ **Treino sob medida** → Sugestões de exercícios, divisão de treinos e como melhorar performance
 🥗 **Alimentação ajustada** → Cardápios, ideias de refeições e ajustes na dieta para seus objetivos  
@@ -335,9 +335,9 @@ Como posso te ajudar hoje?
 
 Que bom te ver aqui! 😊
 
-Vejo que você ainda não completou seu perfil personalizado. Vamos finalizar isso para eu poder criar planos perfeitos para você!
+Vamos completar seu perfil personalizado para eu poder criar planos perfeitos para você!
 
-Precisa de ajuda com algum dado específico?"""
+**Qual é a sua idade?**"""
                 }
                 
         except Exception as e:
@@ -574,7 +574,7 @@ O que você gostaria de fazer hoje?"""
         """Roteia para agente específico baseado na intenção"""
         
         agent_mapping = {
-            "onboarding": "onboarding_agent",
+            "onboarding": "profile_agent",
             "super_personal_trainer": "super_personal_trainer_agent"
         }
         
@@ -596,11 +596,11 @@ Mas posso te ajudar com várias coisas! Escolha uma opção ou me diga direto se
             }
         
         # Importa e executa agente específico
-        agent = None
         try:
-            if agent_name == "onboarding_agent":
-                from app.adk.agents.onboarding_agent import OnboardingAgentNode
-                agent = OnboardingAgentNode()
+            agent = None
+            if agent_name == "profile_agent":
+                from app.adk.agents.profile_agent import ProfileAgentNode
+                agent = ProfileAgentNode()
             elif agent_name == "super_personal_trainer_agent":
                 from app.adk.agents.super_personal_trainer_agent import SuperPersonalTrainerAgentNode
                 agent = SuperPersonalTrainerAgentNode()
@@ -639,8 +639,9 @@ Mas posso te ajudar com várias coisas! Escolha uma opção ou me diga direto se
 
 💪 **Escolha uma opção ou me diga direto seu objetivo que eu preparo algo pra você!**"""
                 }
-            
+                
         except Exception as e:
+            print(f"❌ TextOrchestrator: Erro ao processar agente {agent_name}: {e}")
             return {
                 "agent_name": agent_name,
                 "response": """🤔 **Desculpe, ocorreu um erro ao processar sua solicitação.**

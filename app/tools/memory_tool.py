@@ -7,7 +7,7 @@ from typing import Dict, List, Any, Optional
 from datetime import datetime, timedelta
 from app.adk.simple_adk import Tool
 from app.services.memory import memory_manager
-from app.core.adk_config import ADKConfig
+from app.core.config import Config
 
 class MemoryTool(Tool):
     """Tool de memória com três camadas para ADK"""
@@ -27,22 +27,10 @@ class MemoryTool(Tool):
         Memória de curto prazo: últimas mensagens recentes
         """
         try:
-            # Normaliza o user_id para consistência
-            normalized_user_id = memory_manager._normalize_phone_for_search(user_id)
+            # user_id já é o customer_id (UUID), busca mensagens diretamente
+            messages = await memory_manager.get_user_history_by_customer_id(user_id, limit=limit)
             
-            # Busca o customer_id pelo número de telefone
-            customer_result = memory_manager.supabase.table("customers").select("id").eq("whatsapp", normalized_user_id).execute()
-            
-            if not customer_result.data:
-                print(f"❌ MemoryTool: Customer não encontrado para telefone: {normalized_user_id}")
-                return []
-                
-            customer_id = customer_result.data[0]["id"]
-            
-            # Busca mensagens usando o customer_id
-            messages = await memory_manager.get_user_history_by_customer_id(customer_id, limit=limit)
-            
-            print(f"🧠 MemoryTool: Buscando histórico para customer_id {customer_id} - {len(messages)} mensagens encontradas")
+            print(f"🧠 MemoryTool: Buscando histórico para customer_id {user_id} - {len(messages)} mensagens encontradas")
             
             result = [
                 {
@@ -64,9 +52,8 @@ class MemoryTool(Tool):
         Memória de médio prazo: resumo incremental da sessão
         """
         try:
-            # Normaliza o user_id para consistência
-            normalized_user_id = memory_manager._normalize_phone_for_search(user_id)
-            session = await memory_manager.get_active_session(normalized_user_id)
+            # user_id já é o customer_id (UUID), busca sessão diretamente
+            session = await memory_manager.get_active_session(user_id)
             if session:
                 return {
                     "session_id": session.get("id"),
@@ -84,7 +71,8 @@ class MemoryTool(Tool):
         Memória de longo prazo: perfil persistente do usuário
         """
         try:
-            user = await memory_manager.get_user_by_phone(user_id)
+            # user_id já é o customer_id (UUID), busca usuário diretamente
+            user = await memory_manager.get_user_by_id(user_id)
             if user:
                 profile = {}
                 if user.get("profile"):
@@ -96,7 +84,7 @@ class MemoryTool(Tool):
                 
                 return {
                     "user_id": user.get("id"),
-                    "phone": user.get("phone"),
+                    "phone": user.get("whatsapp"),  # Campo correto na tabela customers
                     "is_active": user.get("is_active", False),
                     "profile": profile,
                     "onboarding_completed": user.get("onboarding_completed", False),
@@ -104,6 +92,7 @@ class MemoryTool(Tool):
                 }
             return {}
         except Exception as e:
+            print(f"❌ MemoryTool: Erro ao buscar perfil: {e}")
             return {}
     
     async def get_long_term_profile(self, user_id: str) -> Dict[str, Any]:
@@ -122,9 +111,8 @@ class MemoryTool(Tool):
     async def save_message(self, user_id: str, content: str, direction: str) -> bool:
         """Salva mensagem na memória de curto prazo"""
         try:
-            # Normaliza o user_id para consistência
-            normalized_user_id = memory_manager._normalize_phone_for_search(user_id)
-            await memory_manager.save_message(normalized_user_id, content, direction)
+            # user_id já é o customer_id (UUID), salva diretamente
+            await memory_manager.save_message(user_id, content, direction)
             return True
         except Exception as e:
             return False
@@ -132,9 +120,8 @@ class MemoryTool(Tool):
     async def update_session_summary(self, user_id: str, summary: str, active_topic: str) -> bool:
         """Atualiza resumo da sessão (médio prazo)"""
         try:
-            # Normaliza o user_id para consistência
-            normalized_user_id = memory_manager._normalize_phone_for_search(user_id)
-            await memory_manager.update_session_summary(normalized_user_id, summary, active_topic)
+            # user_id já é o customer_id (UUID)
+            await memory_manager.update_session_summary(user_id, summary, active_topic)
             return True
         except Exception as e:
             return False
@@ -142,9 +129,10 @@ class MemoryTool(Tool):
     async def update_user_profile(self, user_id: str, profile_data: Dict[str, Any]) -> bool:
         """Atualiza perfil do usuário (longo prazo)"""
         try:
-            await memory_manager.update_user_profile(user_id, profile_data)
-            return True
+            result = await memory_manager.update_user_profile(user_id, profile_data)
+            return result
         except Exception as e:
+            print(f"❌ MemoryTool: Erro ao atualizar perfil: {e}")
             return False
     
     async def update_long_term_profile(self, user_id: str, profile_data: Dict[str, Any]) -> bool:
@@ -158,9 +146,8 @@ class MemoryTool(Tool):
     async def create_new_session(self, user_id: str) -> str:
         """Cria nova sessão para o usuário"""
         try:
-            # Normaliza o user_id para consistência
-            normalized_user_id = memory_manager._normalize_phone_for_search(user_id)
-            session_id = await memory_manager.create_session(normalized_user_id)
+            # user_id já é o customer_id (UUID)
+            session_id = await memory_manager.create_session(user_id)
             return session_id
         except Exception as e:
             return ""
@@ -168,14 +155,13 @@ class MemoryTool(Tool):
     async def check_session_timeout(self, user_id: str) -> bool:
         """Verifica se a sessão atual expirou"""
         try:
-            # Normaliza o user_id para consistência
-            normalized_user_id = memory_manager._normalize_phone_for_search(user_id)
-            session = await memory_manager.get_active_session(normalized_user_id)
+            # user_id já é o customer_id (UUID)
+            session = await memory_manager.get_active_session(user_id)
             if not session:
                 return True
             
             last_interaction = datetime.fromisoformat(session.get("last_interaction_at", ""))
-            timeout_threshold = datetime.now() - timedelta(minutes=ADKConfig.SESSION_TIMEOUT_MINUTES)
+            timeout_threshold = datetime.now() - timedelta(minutes=Config.SESSION_TIMEOUT_MINUTES)
             
             return last_interaction < timeout_threshold
         except Exception as e:
@@ -186,12 +172,12 @@ class MemoryTool(Tool):
         Retorna contexto otimizado para um agente específico
         """
         # Normaliza o user_id para consistência
-        normalized_user_id = memory_manager._normalize_phone_for_search(user_id)
+        user_id = memory_manager._normalize_phone_for_search(user_id)
         
         # Recupera memória em três camadas usando o ID normalizado
-        short_term = await self.get_short_term_memory(normalized_user_id, limit=5)
-        medium_term = await self.get_medium_term_memory(normalized_user_id)
-        long_term = await self.get_long_term_memory(normalized_user_id)
+        short_term = await self.get_short_term_memory(user_id, limit=5)
+        medium_term = await self.get_medium_term_memory(user_id)
+        long_term = await self.get_long_term_memory(user_id)
         
         # Otimiza contexto baseado no tipo de agente
         context = {
@@ -222,7 +208,7 @@ class MemoryTool(Tool):
         Define agente ativo na sessão do usuário
         """
         try:
-            normalized_user_id = memory_manager._normalize_phone_for_search(user_id)
+            user_id = memory_manager._normalize_phone_for_search(user_id)
             
             # Atualiza dados da sessão com agente ativo
             session_data = {
@@ -233,7 +219,7 @@ class MemoryTool(Tool):
             
             # Salva no contexto da sessão (implementação simplificada)
             # Em produção, isso seria salvo no banco de dados
-            print(f"🔒 Sessão ativa definida: {agent_name} para usuário {normalized_user_id}")
+            print(f"🔒 Sessão ativa definida: {agent_name} para usuário {user_id}")
             return True
             
         except Exception as e:
@@ -245,8 +231,8 @@ class MemoryTool(Tool):
         Limpa sessão ativa do usuário
         """
         try:
-            normalized_user_id = memory_manager._normalize_phone_for_search(user_id)
-            print(f"🔓 Sessão ativa limpa para usuário {normalized_user_id}")
+            user_id = memory_manager._normalize_phone_for_search(user_id)
+            print(f"🔓 Sessão ativa limpa para usuário {user_id}")
             return True
             
         except Exception as e:
@@ -258,7 +244,7 @@ class MemoryTool(Tool):
         Recupera dados da sessão ativa do usuário
         """
         try:
-            normalized_user_id = memory_manager._normalize_phone_for_search(user_id)
+            user_id = memory_manager._normalize_phone_for_search(user_id)
             
             # Implementação simplificada - em produção seria recuperado do banco
             # Por enquanto, retorna None para simular que não há sessão ativa

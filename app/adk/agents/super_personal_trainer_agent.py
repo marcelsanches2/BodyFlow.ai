@@ -398,7 +398,7 @@ Forneça uma resposta curta, prática e personalizada baseada nas informações 
 
 Obrigado pela consulta! Foi um prazer te ajudar com suas questões de saúde, nutrição e treino.
 
-Se precisar de mais orientações no futuro, estarei aqui como seu Super Personal Trainer! 
+Se precisar de mais orientações no futuro, estarei aqui para te ajudar! 
 
 Como posso te ajudar agora?
 """

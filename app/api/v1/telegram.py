@@ -472,19 +472,23 @@ Use o botão abaixo para compartilhar seu número de forma segura:""")
                             logger.error("❌ Falha ao obter informações do arquivo (documento)")
                             image_data = None
             
-            # Usa o número de telefone validado como identificador
+            # Busca customer_id pelo telefone validado
+            customer_result = memory_manager.supabase.table("customers").select("id").eq("whatsapp", phone_number).execute()
+            if customer_result.data:
+                user_identifier = customer_result.data[0]["id"]  # Usa customer_id (UUID)
+            else:
+                user_identifier = phone_number  # Fallback para telefone
+            
+            # Define conteúdo baseado no tipo de mensagem
             if contact:
-                user_identifier = validation_result["normalized_phone"]
                 content_to_process = "Contato compartilhado - verificar acesso"
             elif image_data or photo or document:
-                user_identifier = phone_number
                 # Se há texto junto com a imagem, usa o texto do usuário
                 if message_text and message_text.strip():
                     content_to_process = message_text
                 else:
                     content_to_process = "Análise de imagem enviada"
             else:
-                user_identifier = phone_number
                 content_to_process = message_text
             
             logger.info(f"🔍 Processando mensagem:")

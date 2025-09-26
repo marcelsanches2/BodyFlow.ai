@@ -1,23 +1,24 @@
 """
-Agente de Onboarding para ADK
+Profile Agent para ADK - Gerenciamento completo de perfil do usuário
 """
 
 import asyncio
 import os
 import time
 from typing import Dict, Any, Optional, List
+from datetime import datetime, date
 from app.adk.simple_adk import Node
 from anthropic import Anthropic
 from app.tools.memory_tool import MemoryTool
 from app.tools.observability_tool import ObservabilityTool
 
-class OnboardingAgentNode(Node):
-    """Agente responsável pelo onboarding de usuários"""
+class ProfileAgentNode(Node):
+    """Agente responsável pelo gerenciamento completo do perfil do usuário"""
     
     def __init__(self):
         super().__init__(
-            name="onboarding_agent",
-            description="Conduz processo de onboarding e coleta de dados essenciais"
+            name="profile_agent",
+            description="Gerencia perfil do usuário, onboarding e atualizações de dados"
         )
         self.memory_tool = MemoryTool()
         self.observability_tool = ObservabilityTool()
@@ -26,18 +27,107 @@ class OnboardingAgentNode(Node):
         # Estados do onboarding
         self.onboarding_steps = [
             "welcome",
+            "name",
             "age",
-            "weight",
             "height", 
+            "weight",
             "goal",
             "training_level",
             "restrictions",
             "completion"
         ]
+        
+        # Campos do perfil com validações
+        self.profile_fields = {
+            "name": {
+                "type": "text",
+                "required": True,
+                "validation": lambda x: len(x.strip()) >= 2,
+                "error_msg": "Nome deve ter pelo menos 2 caracteres"
+            },
+            "age": {
+                "type": "integer",
+                "required": True,
+                "validation": lambda x: 13 <= x <= 100,
+                "error_msg": "Idade deve estar entre 13 e 100 anos"
+            },
+            "height_cm": {
+                "type": "decimal",
+                "required": True,
+                "validation": lambda x: 100 <= x <= 250,
+                "error_msg": "Altura deve estar entre 100 e 250 cm"
+            },
+            "current_weight_kg": {
+                "type": "decimal",
+                "required": True,
+                "validation": lambda x: 30 <= x <= 300,
+                "error_msg": "Peso deve estar entre 30 e 300 kg"
+            },
+            "goal": {
+                "type": "choice",
+                "required": True,
+                "options": ["emagrecimento", "hipertrofia", "condicionamento", "manutencao"],
+                "validation": lambda x: x in ["emagrecimento", "hipertrofia", "condicionamento", "manutencao"],
+                "error_msg": "Objetivo deve ser: emagrecimento, hipertrofia, condicionamento ou manutencao"
+            },
+            "training_level": {
+                "type": "choice",
+                "required": True,
+                "options": ["iniciante", "intermediario", "avancado"],
+                "validation": lambda x: x in ["iniciante", "intermediario", "avancado"],
+                "error_msg": "Nível deve ser: iniciante, intermediario ou avancado"
+            },
+            "restrictions": {
+                "type": "jsonb",
+                "required": False,
+                "validation": lambda x: isinstance(x, dict),
+                "error_msg": "Restrições devem ser um objeto JSON válido"
+            }
+        }
+    
+    async def _get_user_profile_from_table(self, user_id: str) -> Dict[str, Any]:
+        """Busca perfil do usuário na tabela user_profile"""
+        try:
+            from app.services.memory import MemoryManager
+            memory_manager = MemoryManager()
+            result = memory_manager.supabase.table("user_profile").select("*").eq("user_id", user_id).execute()
+            if result.data:
+                return result.data[0]
+            return {}
+        except Exception as e:
+            print(f"❌ Erro ao buscar perfil na tabela user_profile: {e}")
+            return {}
+    
+    async def _update_user_profile_in_table(self, user_id: str, profile_data: Dict[str, Any]) -> bool:
+        """Atualiza perfil do usuário na tabela user_profile"""
+        try:
+            from app.services.memory import MemoryManager
+            memory_manager = MemoryManager()
+            
+            # Verifica se já existe registro
+            existing = await self._get_user_profile_from_table(user_id)
+            
+            if existing:
+                # Atualiza registro existente
+                result = memory_manager.supabase.table("user_profile").update({
+                    **profile_data,
+                    "updated_at": "NOW()"
+                }).eq("user_id", user_id).execute()
+            else:
+                # Cria novo registro
+                result = memory_manager.supabase.table("user_profile").insert({
+                    "user_id": user_id,
+                    **profile_data
+                }).execute()
+            
+            return len(result.data) > 0
+        except Exception as e:
+            print(f"❌ Erro ao atualizar perfil na tabela user_profile: {e}")
+            return False
     
     async def process(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Processa mensagem no contexto do onboarding
+        Processa mensagem no contexto do gerenciamento de perfil
         """
         start_time = time.time()
         
@@ -48,67 +138,97 @@ class OnboardingAgentNode(Node):
             force_welcome = input_data.get("force_welcome", False)
             update_intent = input_data.get("update_intent", None)
             
-            print(f"🎯 OnboardingAgent: processando mensagem '{content}' com update_intent='{update_intent}'")
+            # Busca perfil na tabela user_profile (fonte única da verdade)
+            profile_data = await self._get_user_profile_from_table(user_id)
             
-            # Se há intenção de atualização específica, trata isso primeiro
-            if update_intent:
-                return await self._handle_profile_update(user_id, content, context, update_intent)
+            # Verifica se onboarding está completo na tabela customers
+            from app.services.memory import MemoryManager
+            memory_manager = MemoryManager()
+            customer_result = memory_manager.supabase.table("customers").select("onboarding_completed").eq("id", user_id).execute()
+            onboarding_completed = customer_result.data[0].get("onboarding_completed", False) if customer_result.data else False
             
-            # Recupera estado atual do onboarding
-            current_state = await self._get_current_onboarding_state(user_id)
-            current_profile = current_state.get("data", {})
-            
-            # Se for welcome forçado, mostra mensagem de boas-vindas
-            if force_welcome:
-                result = await self._handle_welcome_step_with_bodyflow_greeting(user_id, content, current_profile)
+            # SEPARAÇÃO COMPLETA: Onboarding vs Atualização
+            if onboarding_completed:
+                # FLUXO DE ATUALIZAÇÃO DE PERFIL
+                return await self._handle_profile_update_flow(user_id, content, profile_data, update_intent)
             else:
-                # Detecta se o usuário quer alterar o objetivo especificamente
-                goal = await self._extract_goal(content)
-                if goal and current_profile.get("goal"):
-                    # Usuário quer alterar objetivo
-                    updated_profile = {**current_profile, "goal": goal}
-                    result = {
-                        "response": f"✅ Objetivo atualizado para: **{goal}**\n\nVamos continuar com o próximo passo:",
-                        "current_step": "training_level",
-                        "profile_updated": True,
-                        "profile_data": updated_profile
-                    }
-                else:
-                    # Processa resposta do usuário normalmente
-                    result = await self._process_onboarding_step(user_id, content, current_state, context)
-            
-            # Atualiza perfil se necessário
-            if result.get("profile_updated"):
-                await self._update_user_profile(user_id, result.get("profile_data", {}))
-            
-            # Verifica se onboarding foi completado
-            if result.get("onboarding_completed"):
-                await self._complete_onboarding(user_id)
-                result["handoff"] = await self._suggest_next_agent(user_id, context)
-            
-            execution_time = (time.time() - start_time) * 1000
-            
-            return {
-                "success": True,
-                "response": result.get("response", ""),
-                "agent_name": "onboarding_agent",
-                "handoff": result.get("handoff"),
-                "metadata": {
-                    "current_step": result.get("current_step"),
-                    "onboarding_completed": result.get("onboarding_completed", False),
-                    "execution_time_ms": execution_time
-                }
-            }
+                # FLUXO DE ONBOARDING
+                return await self._handle_onboarding_flow(user_id, content, context, profile_data, force_welcome)
             
         except Exception as e:
             execution_time = (time.time() - start_time) * 1000
             return {
                 "success": False,
                 "response": "Erro no processo de cadastro. Tente novamente.",
-                "agent_name": "onboarding_agent",
+                "agent_name": "profile_agent",
                 "metadata": {
                     "error": str(e)[:100],
                     "execution_time_ms": execution_time
+                }
+            }
+    
+    async def _handle_onboarding_flow(self, user_id: str, content: str, context: Dict[str, Any], profile_data: Dict[str, Any], force_welcome: bool) -> Dict[str, Any]:
+        """
+        FLUXO DE ONBOARDING - Apenas para usuários que não completaram o onboarding
+        """
+        try:
+            # Se for welcome forçado, mostra mensagem de boas-vindas
+            if force_welcome:
+                return await self._handle_welcome_step(user_id, content, profile_data)
+            
+            # Processa onboarding passo a passo (mesmo que o perfil tenha dados)
+            result = await self._process_onboarding_flow(user_id, content, profile_data)
+            
+            # Se onboarding foi completado, sugere próximo agente
+            if result.get("onboarding_completed"):
+                result["handoff"] = await self._suggest_next_agent(user_id, context)
+            
+            return {
+                "success": True,
+                "response": result.get("response", ""),
+                "agent_name": "profile_agent",
+                "handoff": result.get("handoff"),
+                "metadata": {
+                    "current_step": result.get("current_step"),
+                    "onboarding_completed": result.get("onboarding_completed", False),
+                    "profile_updated": result.get("profile_updated", False)
+                }
+            }
+            
+        except Exception as e:
+            return {
+                "success": False,
+                "response": "Erro no processo de cadastro. Tente novamente.",
+                "agent_name": "profile_agent",
+                "metadata": {
+                    "error": str(e)[:100]
+                }
+            }
+    
+    async def _handle_profile_update_flow(self, user_id: str, content: str, profile_data: Dict[str, Any], update_intent: str) -> Dict[str, Any]:
+        """
+        FLUXO DE ATUALIZAÇÃO DE PERFIL - Apenas para usuários que completaram o onboarding
+        """
+        try:
+            # Se é uma solicitação de atualização específica
+            if update_intent:
+                return await self._handle_specific_update(user_id, content, update_intent, profile_data)
+            
+            # Detecta se o usuário quer atualizar algo específico
+            detected_intent = await self._detect_update_intent(content)
+            if detected_intent:
+                return await self._handle_specific_update(user_id, content, detected_intent, profile_data)
+            
+            # Se não detectou intenção específica, mostra opções de atualização
+            return await self._handle_profile_update_request(user_id, content, profile_data)
+            
+        except Exception as e:
+            return {
+                "success": False,
+                "response": "Erro na atualização de perfil. Tente novamente.",
+                "agent_name": "profile_agent",
+                "metadata": {
+                    "error": str(e)[:100]
                 }
             }
     
@@ -963,46 +1083,65 @@ Resposta (apenas o nível ou "null"):
             return None
     
     async def _extract_restrictions(self, content: str) -> Optional[str]:
-        """Extrai restrições da mensagem usando LLM"""
+        """Extrai restrições alimentares da mensagem usando LLM de forma inteligente"""
         try:
             prompt = f"""
-Você é um assistente inteligente especializado em interpretar restrições alimentares e de saúde de forma contextual e natural.
+Você é um especialista em interpretar restrições alimentares e de saúde de forma inteligente e contextual.
 
-MENSAGEM: "{content}"
+MENSAGEM DO USUÁRIO: "{content}"
 
-ANÁLISE INTELIGENTE:
-Identifique se o usuário está fornecendo informações sobre restrições alimentares ou de saúde. Seja contextualmente inteligente:
+TAREFA: Identifique se o usuário está mencionando restrições alimentares, alergias, intolerâncias ou condições de saúde que afetam a alimentação.
 
-• Analise o contexto completo da mensagem
-• Entenda variações naturais de linguagem e sinônimos
-• Considere o tom e intenção da mensagem
-• Se não há restrições claras ou é ambíguo, retorne "null"
+INTERPRETAÇÃO INTELIGENTE:
+- Seja flexível com linguagem natural e coloquial
+- Entenda sinônimos e variações de expressão
+- Considere contexto e intenção
+- Reconheça diferentes formas de expressar a mesma restrição
 
-INTERPRETAÇÃO CONTEXTUAL:
-Seja inteligente na interpretação. Entenda a intenção real por trás das palavras, considerando:
-- Contexto da conversa
-- Padrões naturais de linguagem
-- Sinônimos e variações de expressão
-- Intenção comunicativa do usuário
+EXEMPLOS DE INTERPRETAÇÃO:
+- "não posso comer lactose" → "intolerância à lactose"
+- "sou diabético" → "diabetes"
+- "tenho alergia a amendoim" → "alergia a amendoim"
+- "não como carne" → "vegetariano"
+- "sou vegano" → "vegano"
+- "tenho pressão alta" → "hipertensão"
+- "não posso comer glúten" → "intolerância ao glúten"
+- "tenho gastrite" → "gastrite"
+- "não como fritura" → "evita frituras"
+- "tenho colesterol alto" → "colesterol alto"
 
-Resposta (apenas a restrição, "nenhuma" ou "null"):
+FORMATO DE RESPOSTA:
+- Se há restrições claras: descreva de forma clara e médica
+- Se não há restrições: "nenhuma"
+- Se é ambíguo ou não relacionado: "nenhuma"
+
+Resposta (apenas a restrição identificada ou "nenhuma"):
 """
             
             response = self.anthropic_client.messages.create(
                 model="claude-3-5-sonnet-20241022",
-                max_tokens=30,
+                max_tokens=50,
                 temperature=0.1,
                 messages=[{"role": "user", "content": prompt}]
             )
             
             result = response.content[0].text.strip().lower()
             
-            if result == "null":
-                return None
-            elif result == "nenhuma":
+            # Processa a resposta de forma inteligente
+            if result in ["nenhuma", "none", "não", "nao", "nada", "null", ""]:
                 return "nenhuma"
             else:
-                return result
+                # Normaliza a resposta para evitar textos muito longos
+                # Pega apenas a primeira parte antes de parênteses ou explicações
+                normalized = result.split('(')[0].split('[')[0].strip()
+                # Remove explicações extras e mantém apenas a restrição principal
+                if len(normalized) > 50:
+                    # Se muito longo, pega apenas as primeiras palavras
+                    words = normalized.split()
+                    if len(words) > 4:
+                        normalized = ' '.join(words[:4])
+                
+                return normalized
                 
         except Exception:
             return None
@@ -1040,21 +1179,643 @@ Agora posso te ajudar com:
     async def _complete_onboarding(self, user_id: str) -> None:
         """Marca onboarding como completo"""
         try:
-            # Normaliza o user_id para consistência
-            normalized_user_id = self.memory_tool.memory_manager._normalize_phone_for_search(user_id)
-            
-            # Atualiza o perfil com onboarding_completed = True
-            await self.memory_tool.update_long_term_profile(normalized_user_id, {"onboarding_completed": True})
-            
-            # Atualiza também o campo onboarding_completed diretamente na tabela customers
-            result = self.memory_tool.memory_manager.supabase.table("customers").update({
+            # user_id já é o customer_id (UUID), atualiza diretamente
+            from app.services.memory import MemoryManager
+            memory_manager = MemoryManager()
+            result = memory_manager.supabase.table("customers").update({
                 "onboarding_completed": True
-            }).eq("whatsapp", normalized_user_id).execute()
+            }).eq("id", user_id).execute()
             
-            print(f"✅ Onboarding completado para {normalized_user_id}: {len(result.data)} registro(s) atualizado(s)")
+            print(f"✅ Onboarding completado para customer_id {user_id}: {len(result.data)} registro(s) atualizado(s)")
             
         except Exception as e:
             print(f"❌ Erro ao completar onboarding: {e}")
+    
+    def _extract_height_value(self, content: str) -> float:
+        """Extrai altura em cm de várias formas de entrada"""
+        import re
+        
+        content = content.lower().strip()
+        
+        # Padrões para diferentes formas de entrada
+        patterns = [
+            # 1 metro e 80
+            r'(\d+)\s*metro\s*e\s*(\d+)',
+            # 1,80m, 1.80m
+            r'(\d+)[,.](\d+)\s*m',
+            # 1m80
+            r'(\d+)m(\d+)',
+            # 180cm, 180 cm
+            r'(\d+)\s*cm',
+            # 1,80, 1.80 (assume metros se < 3)
+            r'^(\d+)[,.](\d+)$',
+            # 180 (assume cm se >= 100)
+            r'^(\d+)$'
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, content)
+            if match:
+                groups = match.groups()
+                
+                if len(groups) == 2 and groups[1]:  # 1 metro e 80 ou 1,80m
+                    meters = int(groups[0])
+                    cm = int(groups[1])
+                    if cm < 100:  # 1,80 -> 180cm
+                        return meters * 100 + cm
+                    else:  # 1 metro e 80 -> 180cm
+                        return meters * 100 + cm
+                elif len(groups) == 1:  # 180 ou 180cm
+                    value = int(groups[0])
+                    if value >= 100:  # Assume cm
+                        return float(value)
+                    else:  # Assume metros
+                        return float(value) * 100
+        
+        return None
+    
+    def _extract_weight_value(self, content: str) -> float:
+        """Extrai peso em kg de várias formas de entrada"""
+        import re
+        
+        content = content.lower().strip()
+        
+        # Padrões para diferentes formas de entrada
+        patterns = [
+            # 75kg, 75 kg, 75kgs
+            r'(\d+(?:\.\d+)?)\s*kg?s?',
+            # 75 (assume kg)
+            r'^(\d+(?:\.\d+)?)$'
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, content)
+            if match:
+                return float(match.group(1))
+        
+        return None
+    
+    def _extract_goal_value(self, content: str) -> str:
+        """Extrai objetivo de várias formas de entrada"""
+        content = content.lower().strip()
+        
+        # Mapeamento de sinônimos para objetivos
+        goal_mapping = {
+            "emagrecimento": ["emagrecer", "perder peso", "queimar gordura", "definir", "secar", "emagrecimento"],
+            "hipertrofia": ["ganhar massa", "crescer", "hipertrofia", "musculação", "malhar", "treinar"],
+            "condicionamento": ["condicionamento", "fitness", "saúde", "bem estar", "exercitar"],
+            "manutencao": ["manter", "manutenção", "manter peso", "equilibrar"]
+        }
+        
+        for goal, synonyms in goal_mapping.items():
+            for synonym in synonyms:
+                if synonym in content:
+                    return goal
+        
+        return None
+    
+    def _extract_training_level_value(self, content: str) -> str:
+        """Extrai nível de treino de várias formas de entrada"""
+        content = content.lower().strip()
+        
+        # Mapeamento de sinônimos para níveis
+        level_mapping = {
+            "iniciante": ["iniciante", "começando", "novato", "primeira vez", "nunca treinei", "sou novo"],
+            "intermediario": ["intermediário", "intermediario", "já treino", "tenho experiência", "meio termo"],
+            "avancado": ["avançado", "avancado", "experiente", "treino há anos", "sou forte"]
+        }
+        
+        for level, synonyms in level_mapping.items():
+            for synonym in synonyms:
+                if synonym in content:
+                    return level
+        
+        return None
+    
+    # =====================================================
+    # MÉTODOS PARA GERENCIAMENTO DE PERFIL
+    # =====================================================
+    
+    def _is_profile_complete(self, profile_data: Dict[str, Any]) -> bool:
+        """Verifica se o perfil está completo"""
+        required_fields = ["age", "height_cm", "current_weight_kg", "goal", "training_level"]
+        return all(profile_data.get(field) for field in required_fields)
+    
+    async def _handle_specific_update(self, user_id: str, content: str, update_intent: str, profile_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Lida com atualizações específicas de campos do perfil"""
+        try:
+            # Extrai o valor do campo
+            field_value = await self._extract_field_value(content, update_intent)
+            
+            if not field_value:
+                return {
+                    "response": f"Não consegui entender o valor para {update_intent}. Tente novamente.",
+                    "current_step": "update_requested"
+                }
+            
+            # Valida o valor
+            validation_result = self._validate_field_value(update_intent, field_value)
+            if not validation_result["valid"]:
+                return {
+                    "response": f"❌ {validation_result['error']}",
+                    "current_step": "update_requested"
+                }
+            
+            # Atualiza o perfil
+            updated_profile = {**profile_data, update_intent: field_value}
+            success = await self._update_user_profile_in_table(user_id, updated_profile)
+            
+            if success:
+                return {
+                    "response": f"✅ {update_intent.replace('_', ' ').title()} atualizado para: **{field_value}**",
+                    "profile_updated": True,
+                    "profile_data": updated_profile,
+                    "current_step": "update_completed"
+                }
+            else:
+                return {
+                    "response": f"❌ Erro ao atualizar {update_intent}. Tente novamente.",
+                    "current_step": "update_requested"
+                }
+                
+        except Exception as e:
+            return {
+                "response": f"❌ Erro ao processar atualização: {str(e)[:100]}",
+                "current_step": "update_requested"
+            }
+    
+    async def _handle_profile_update_request(self, user_id: str, content: str, profile_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Lida com solicitações de atualização de perfil de usuários já cadastrados"""
+        try:
+            # Detecta qual campo o usuário quer atualizar
+            update_intent = await self._detect_update_intent(content)
+            
+            if update_intent:
+                return await self._handle_specific_update(user_id, content, update_intent, profile_data)
+            
+            # Se não detectou intenção específica, mostra opções
+            return {
+                "response": f"""
+👤 **Atualização de Perfil**
+
+Seu perfil atual:
+• Nome: {profile_data.get('name', 'N/A')}
+• Idade: {profile_data.get('age', 'N/A')} anos
+• Altura: {profile_data.get('height_cm', 'N/A')} cm
+• Peso: {profile_data.get('current_weight_kg', 'N/A')} kg
+• Objetivo: {profile_data.get('goal', 'N/A')}
+• Nível: {profile_data.get('training_level', 'N/A')}
+
+Para atualizar, digite:
+• "Atualizar nome" ou "Mudar nome"
+• "Atualizar peso" ou "Mudar peso"
+• "Atualizar objetivo" ou "Mudar objetivo"
+• etc.
+
+Ou digite diretamente o novo valor, como "80 kg" para peso.
+""",
+                "current_step": "update_options"
+            }
+            
+        except Exception as e:
+            return {
+                "response": f"❌ Erro ao processar solicitação: {str(e)[:100]}",
+                "current_step": "update_requested"
+            }
+    
+    
+    async def _process_onboarding_flow(self, user_id: str, content: str, profile_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Processa fluxo de onboarding"""
+        try:
+            # Determina próximo passo
+            next_step = self._get_next_onboarding_step(profile_data)
+            
+            if next_step == "welcome":
+                return await self._handle_welcome_step(user_id, content, profile_data)
+            elif next_step == "age":
+                return await self._handle_age_step(user_id, content, profile_data)
+            elif next_step == "height":
+                return await self._handle_height_step(user_id, content, profile_data)
+            elif next_step == "weight":
+                return await self._handle_weight_step(user_id, content, profile_data)
+            elif next_step == "goal":
+                return await self._handle_goal_step(user_id, content, profile_data)
+            elif next_step == "training_level":
+                return await self._handle_training_level_step(user_id, content, profile_data)
+            elif next_step == "restrictions":
+                return await self._handle_restrictions_step(user_id, content, profile_data)
+            elif next_step == "completion":
+                return await self._handle_completion_step(user_id, content, profile_data)
+            else:
+                return await self._handle_welcome_step(user_id, content, profile_data)
+                
+        except Exception as e:
+            return {
+                "response": f"Erro no fluxo de onboarding: {str(e)[:100]}",
+                "current_step": "error"
+            }
+    
+    def _get_next_onboarding_step(self, profile_data: Dict[str, Any]) -> str:
+        """Determina o próximo passo do onboarding"""
+        # Se o perfil está completamente vazio, mostra welcome primeiro
+        has_any_data = any(v for v in profile_data.values() if v is not None and v != "")
+        if not has_any_data:
+            return "welcome"
+        elif not profile_data.get("age"):
+            return "age"
+        elif not profile_data.get("height_cm"):
+            return "height"
+        elif not profile_data.get("current_weight_kg"):
+            return "weight"
+        elif not profile_data.get("goal"):
+            return "goal"
+        elif not profile_data.get("training_level"):
+            return "training_level"
+        elif not profile_data.get("restrictions"):
+            return "restrictions"
+        else:
+            return "completion"
+    
+    async def _extract_field_value(self, content: str, field_name: str) -> Any:
+        """Extrai valor de um campo específico da mensagem do usuário"""
+        try:
+            if field_name == "name":
+                return content.strip()
+            elif field_name == "age":
+                # Extrai número da mensagem
+                import re
+                numbers = re.findall(r'\d+', content)
+                return int(numbers[0]) if numbers else None
+            elif field_name == "height_cm":
+                return self._extract_height_value(content)
+            elif field_name == "current_weight_kg":
+                return self._extract_weight_value(content)
+            elif field_name == "goal":
+                return self._extract_goal_value(content)
+            elif field_name == "training_level":
+                return self._extract_training_level_value(content)
+            elif field_name == "restrictions":
+                return await self._extract_restrictions(content)
+            else:
+                return content.strip()
+                
+        except Exception:
+            return None
+    
+    def _validate_field_value(self, field_name: str, value: Any) -> Dict[str, Any]:
+        """Valida valor de um campo"""
+        try:
+            field_config = self.profile_fields.get(field_name, {})
+            
+            if not field_config:
+                return {"valid": False, "error": f"Campo {field_name} não encontrado"}
+            
+            # Validação básica
+            if field_config.get("required") and not value:
+                return {"valid": False, "error": f"{field_name} é obrigatório"}
+            
+            # Validação específica
+            validation_func = field_config.get("validation")
+            if validation_func and not validation_func(value):
+                return {"valid": False, "error": field_config.get("error_msg", f"Valor inválido para {field_name}")}
+            
+            return {"valid": True, "error": None}
+            
+        except Exception as e:
+            return {"valid": False, "error": f"Erro na validação: {str(e)}"}
+    
+    async def _detect_update_intent(self, content: str) -> Optional[str]:
+        """Detecta intenção de atualização de campo específico"""
+        try:
+            content_lower = content.lower()
+            
+            # Mapeamento de palavras-chave para campos
+            field_mappings = {
+                "nome": "name",
+                "name": "name",
+                "idade": "age",
+                "age": "age",
+                "altura": "height_cm",
+                "height": "height_cm",
+                "peso": "current_weight_kg",
+                "weight": "current_weight_kg",
+                "objetivo": "goal",
+                "goal": "goal",
+                "nível": "training_level",
+                "level": "training_level",
+                "treino": "training_level",
+                "restrições": "restrictions",
+                "restrictions": "restrictions"
+            }
+            
+            # Palavras que indicam atualização
+            update_keywords = ["atualizar", "mudar", "alterar", "update", "change", "modify"]
+            
+            # Verifica se há intenção de atualização
+            has_update_intent = any(keyword in content_lower for keyword in update_keywords)
+            
+            if has_update_intent:
+                # Procura por campo específico
+                for keyword, field in field_mappings.items():
+                    if keyword in content_lower:
+                        return field
+            
+            # Se não há palavras de atualização, mas há um valor específico, tenta detectar
+            if not has_update_intent:
+                # Detecta por padrões de valor (apenas com unidades explícitas)
+                import re
+                
+                # Peso (ex: "80 kg", "80kg") - com unidade
+                if re.search(r'\d+(?:\.\d+)?\s*kg', content_lower):
+                    return "current_weight_kg"
+                
+                # Altura (ex: "175 cm", "175cm") - com unidade
+                if re.search(r'\d+(?:\.\d+)?\s*cm', content_lower):
+                    return "height_cm"
+                
+                # Idade (ex: "30 anos") - apenas com palavra "anos"
+                if re.search(r'\d+\s*anos?', content_lower):
+                    return "age"
+            
+            return None
+            
+        except Exception:
+            return None
+    
+    # =====================================================
+    # MÉTODOS DE ONBOARDING ESPECÍFICOS
+    # =====================================================
+    
+    async def _handle_welcome_step(self, user_id: str, content: str, profile_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Lida com o passo de boas-vindas"""
+        # Se há conteúdo na mensagem, tenta detectar se é uma idade
+        if content.strip():
+            import re
+            # Verifica se contém números (qualquer número pode ser idade)
+            numbers = re.findall(r'\d+', content.strip())
+            if numbers:
+                # Qualquer número é considerado uma tentativa de idade
+                return await self._handle_age_step(user_id, content, profile_data)
+        
+        # Se não há conteúdo ou não contém números, mostra welcome
+        return {
+            "response": """
+🎉 **Bem-vindo ao BodyFlow.ai!**
+
+Que bom te ter aqui! 
+
+Para criar planos perfeitos e personalizados para você, vou coletar algumas informações importantes sobre seus objetivos, características físicas e preferências.
+
+Isso me permitirá oferecer:
+• Treinos sob medida para seu nível
+• Dietas ajustadas aos seus objetivos  
+• Receitas que combinam com seu estilo de vida
+• Acompanhamento personalizado da sua evolução
+
+Vamos começar:
+
+**Qual sua idade?**
+""",
+            "current_step": "age",
+            "profile_updated": False
+        }
+    
+    
+    async def _handle_age_step(self, user_id: str, content: str, profile_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Lida com coleta da idade"""
+        try:
+            import re
+            numbers = re.findall(r'\d+', content)
+            if not numbers:
+                return {
+                    "response": "Por favor, digite sua idade:",
+                    "current_step": "age",
+                    "profile_updated": False
+                }
+            
+            age = int(numbers[0])
+            if not (13 <= age <= 100):
+                return {
+                    "response": "Idade deve estar entre 13 e 100 anos. Tente novamente:",
+                    "current_step": "age",
+                    "profile_updated": False
+                }
+            
+            updated_profile = {**profile_data, "age": age}
+            print(f"💾 ProfileAgent: Salvando idade {age} para customer_id {user_id}")
+            success = await self._update_user_profile_in_table(user_id, updated_profile)
+            print(f"💾 ProfileAgent: Resultado do salvamento: {success}")
+            
+            if success:
+                return {
+                    "response": f"✅ Idade salva: **{age} anos**\n\n**Qual sua altura?**",
+                    "current_step": "height",
+                    "profile_updated": True,
+                    "profile_data": updated_profile
+                }
+            else:
+                return {
+                    "response": "Erro ao salvar idade. Tente novamente:",
+                    "current_step": "age",
+                    "profile_updated": False
+                }
+                
+        except Exception:
+            return {
+                "response": "Por favor, digite sua idade:",
+                "current_step": "age",
+                "profile_updated": False
+            }
+    
+    async def _handle_height_step(self, user_id: str, content: str, profile_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Lida com coleta da altura"""
+        try:
+            height_cm = self._extract_height_value(content)
+            
+            if height_cm is None:
+                return {
+                    "response": "Por favor, digite sua altura:",
+                    "current_step": "height",
+                    "profile_updated": False
+                }
+            
+            if not (100 <= height_cm <= 250):
+                return {
+                    "response": "Altura deve estar entre 100 e 250 cm. Tente novamente:",
+                    "current_step": "height",
+                    "profile_updated": False
+                }
+            
+            updated_profile = {**profile_data, "height_cm": height_cm}
+            success = await self._update_user_profile_in_table(user_id, updated_profile)
+            
+            if success:
+                return {
+                    "response": f"✅ Altura salva: **{height_cm} cm**\n\n**Qual seu peso?**",
+                    "current_step": "weight",
+                    "profile_updated": True,
+                    "profile_data": updated_profile
+                }
+            else:
+                return {
+                    "response": "Erro ao salvar altura. Tente novamente:",
+                    "current_step": "height",
+                    "profile_updated": False
+                }
+                
+        except Exception:
+            return {
+                "response": "Por favor, digite sua altura:",
+                "current_step": "height",
+                "profile_updated": False
+            }
+    
+    async def _handle_weight_step(self, user_id: str, content: str, profile_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Lida com coleta do peso"""
+        try:
+            weight_kg = self._extract_weight_value(content)
+            
+            if weight_kg is None:
+                return {
+                    "response": "Por favor, digite seu peso:",
+                    "current_step": "weight",
+                    "profile_updated": False
+                }
+            
+            if not (30 <= weight_kg <= 300):
+                return {
+                    "response": "Peso deve estar entre 30 e 300 kg. Tente novamente:",
+                    "current_step": "weight",
+                    "profile_updated": False
+                }
+            
+            updated_profile = {**profile_data, "current_weight_kg": weight_kg}
+            success = await self._update_user_profile_in_table(user_id, updated_profile)
+            
+            if success:
+                return {
+                    "response": f"✅ Peso salvo: **{weight_kg} kg**\n\n**Qual seu objetivo principal?**\n\n• Emagrecimento\n• Hipertrofia\n• Condicionamento\n• Manutenção",
+                    "current_step": "goal",
+                    "profile_updated": True,
+                    "profile_data": updated_profile
+                }
+            else:
+                return {
+                    "response": "Erro ao salvar peso. Tente novamente:",
+                    "current_step": "weight",
+                    "profile_updated": False
+                }
+                
+        except Exception:
+            return {
+                "response": "Por favor, digite seu peso:",
+                "current_step": "weight",
+                "profile_updated": False
+            }
+    
+    async def _handle_goal_step(self, user_id: str, content: str, profile_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Lida com coleta do objetivo"""
+        goal = self._extract_goal_value(content)
+        
+        if not goal or goal not in ["emagrecimento", "hipertrofia", "condicionamento", "manutencao"]:
+            return {
+                "response": "Por favor, escolha um objetivo válido:\n\n• Emagrecimento\n• Hipertrofia\n• Condicionamento\n• Manutenção",
+                "current_step": "goal",
+                "profile_updated": False
+            }
+        
+        updated_profile = {**profile_data, "goal": goal}
+        success = await self._update_user_profile_in_table(user_id, updated_profile)
+        
+        if success:
+            return {
+                "response": f"✅ Objetivo salvo: **{goal}**\n\n**Qual seu nível de treino?**\n\n• Iniciante\n• Intermediário\n• Avançado",
+                "current_step": "training_level",
+                "profile_updated": True,
+                "profile_data": updated_profile
+            }
+        else:
+            return {
+                "response": "Erro ao salvar objetivo. Tente novamente:",
+                "current_step": "goal",
+                "profile_updated": False
+            }
+    
+    async def _handle_training_level_step(self, user_id: str, content: str, profile_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Lida com coleta do nível de treino"""
+        training_level = self._extract_training_level_value(content)
+        
+        if not training_level or training_level not in ["iniciante", "intermediario", "avancado"]:
+            return {
+                "response": "Por favor, escolha um nível válido:\n\n• Iniciante\n• Intermediário\n• Avançado",
+                "current_step": "training_level",
+                "profile_updated": False
+            }
+        
+        updated_profile = {**profile_data, "training_level": training_level}
+        success = await self._update_user_profile_in_table(user_id, updated_profile)
+        
+        if success:
+            return {
+                "response": f"✅ Nível salvo: **{training_level}**\n\n**Tem alguma restrição alimentar ou de saúde?**\n\nSe não tiver, digite 'nenhuma' ou 'não'.",
+                "current_step": "restrictions",
+                "profile_updated": True,
+                "profile_data": updated_profile
+            }
+        else:
+            return {
+                "response": "Erro ao salvar nível. Tente novamente:",
+                "current_step": "training_level",
+                "profile_updated": False
+            }
+    
+    async def _handle_restrictions_step(self, user_id: str, content: str, profile_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Lida com coleta de restrições"""
+        restrictions = await self._extract_restrictions(content)
+        
+        if restrictions == "null" or restrictions in ["nenhuma", "não", "nao", "none"]:
+            restrictions = {}
+        
+        updated_profile = {**profile_data, "restrictions": restrictions}
+        success = await self._update_user_profile_in_table(user_id, updated_profile)
+        
+        if success:
+            # Marca onboarding como completo no banco de dados
+            await self._complete_onboarding(user_id)
+            
+            return {
+                "response": f"✅ Restrições salvas: **{restrictions if restrictions else 'Nenhuma'}**\n\n**Perfil completo!** 🎉\n\n🤝 **Como posso te ajudar?**\n\nPosso te auxiliar com:\n\n🏃‍♂️ **Treino sob medida** → Sugestões de exercícios, divisão de treinos e como melhorar performance\n🥗 **Alimentação ajustada** → Cardápios, ideias de refeições e ajustes na dieta para seus objetivos  \n📊 **Análise corporal** → Feedback sobre evolução, composição e pontos que podemos melhorar\n🍽️ **Receitas fitness** → Pratos rápidos, saudáveis e fáceis de incluir na rotina\n\n💪 **Escolha uma opção ou me diga direto seu objetivo que eu preparo algo pra você!**",
+                "current_step": "completion",
+                "profile_updated": True,
+                "profile_data": updated_profile,
+                "onboarding_completed": True
+            }
+        else:
+            return {
+                "response": "❌ Erro ao salvar restrições. Tente novamente:",
+                "current_step": "restrictions",
+                "profile_updated": False
+            }
+    
+    async def _handle_completion_step(self, user_id: str, content: str, profile_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Lida com conclusão do onboarding"""
+        return {
+            "response": """
+🎉 **Perfil criado com sucesso!**
+
+Agora você pode acessar todos os serviços do BodyFlow:
+
+🏃‍♂️ **Treino sob medida** → Sugestões de exercícios, divisão de treinos e como melhorar performance
+🥗 **Alimentação ajustada** → Cardápios, ideias de refeições e ajustes na dieta para seus objetivos
+📊 **Análise corporal** → Feedback sobre evolução, composição e pontos que podemos melhorar
+🍽️ **Receitas fitness** → Pratos rápidos, saudáveis e fáceis de incluir na rotina
+
+💪 Escolha uma opção ou me diga direto seu objetivo que eu preparo algo pra você.
+""",
+            "current_step": "completed",
+            "profile_updated": False,
+            "onboarding_completed": True
+        }
     
     async def _suggest_next_agent(self, user_id: str, context: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Sugere próximo agente baseado no perfil"""

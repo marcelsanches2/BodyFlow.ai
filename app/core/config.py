@@ -27,3 +27,6 @@ class Config:
     # Application Configuration
     DEBUG = os.getenv("DEBUG", "True").lower() == "true"
     PORT = int(os.getenv("PORT", "8000"))
+    
+    # Session Configuration
+    SESSION_TIMEOUT_MINUTES = int(os.getenv("SESSION_TIMEOUT_MINUTES", "60"))

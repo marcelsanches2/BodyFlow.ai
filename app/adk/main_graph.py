@@ -8,7 +8,7 @@ from app.adk.simple_adk import AgentDevelopmentKit, Graph
 from app.adk.router_node import RouterNode
 from app.adk.text_orchestrator import TextOrchestratorNode
 from app.adk.image_orchestrator import ImageOrchestratorNode
-from app.adk.agents.onboarding_agent import OnboardingAgentNode
+from app.adk.agents.profile_agent import ProfileAgentNode
 from app.adk.agents.super_personal_trainer_agent import SuperPersonalTrainerAgentNode
 from app.tools.memory_tool import MemoryTool
 from app.tools.observability_tool import ObservabilityTool
@@ -31,7 +31,7 @@ class BodyFlowGraph:
             image_orchestrator = ImageOrchestratorNode()
             
             # Agentes
-            onboarding_agent = OnboardingAgentNode()
+            profile_agent = ProfileAgentNode()
             super_personal_trainer_agent = SuperPersonalTrainerAgentNode()
             
             # Tools
@@ -46,7 +46,7 @@ class BodyFlowGraph:
             self.graph.add_node("router", router_node)
             self.graph.add_node("text_orchestrator", text_orchestrator)
             self.graph.add_node("image_orchestrator", image_orchestrator)
-            self.graph.add_node("onboarding_agent", onboarding_agent)
+            self.graph.add_node("profile_agent", profile_agent)
             self.graph.add_node("super_personal_trainer_agent", super_personal_trainer_agent)
             
             # Adiciona tools
@@ -72,7 +72,7 @@ class BodyFlowGraph:
             self.graph.add_edge("router", "image_orchestrator", condition="content_type == 'image'")
             
             # Text Orchestrator conecta aos agentes baseado na intenção
-            self.graph.add_edge("text_orchestrator", "onboarding_agent", condition="intent == 'onboarding'")
+            self.graph.add_edge("text_orchestrator", "profile_agent", condition="intent == 'onboarding'")
             self.graph.add_edge("text_orchestrator", "super_personal_trainer_agent", condition="intent == 'super_personal_trainer'")
             
             # Image Orchestrator conecta ao Super Personal Trainer

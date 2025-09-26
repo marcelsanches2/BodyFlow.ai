@@ -192,6 +192,29 @@ class MemoryManager:
             print(f"❌ Erro ao buscar usuário: {e}")
             return None
 
+    async def get_user_by_id(self, customer_id: str) -> Dict[str, Any]:
+        """
+        Busca um usuário pelo customer_id na tabela customers
+        
+        Args:
+            customer_id: ID do usuário (UUID)
+        
+        Returns:
+            Dict: Dados do usuário ou None se não encontrado
+        """
+        try:
+            # Busca direta sem await (cliente síncrono)
+            result = self.supabase.table("customers").select("*").eq("id", customer_id).execute()
+            
+            if result.data:
+                user = result.data[0]
+                return user
+            else:
+                return None
+                
+        except Exception as e:
+            print(f"❌ Erro ao buscar usuário por ID: {e}")
+            return None
 
     async def is_user_active(self, phone: str) -> bool:
         """
@@ -271,10 +294,12 @@ class MemoryManager:
                 "last_profile_update": datetime.now().isoformat()
             }
             
-            result = self.supabase.table("customers").update(data).eq("whatsapp", user_id).execute()
+            # user_id é o customer_id (UUID), não o telefone
+            result = self.supabase.table("customers").update(data).eq("id", user_id).execute()
+            print(f"💾 MemoryManager: Atualizando perfil para customer_id {user_id}: {len(result.data)} registro(s) atualizado(s)")
             return len(result.data) > 0
         except Exception as e:
-            print(f"Erro ao atualizar perfil: {e}")
+            print(f"❌ Erro ao atualizar perfil: {e}")
             return False
     
     # === MÉTODOS DE OBSERVABILIDADE ===
