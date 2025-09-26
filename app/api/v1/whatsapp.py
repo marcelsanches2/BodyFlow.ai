@@ -11,6 +11,7 @@ from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import Response
 from twilio.twiml.messaging_response import MessagingResponse
 from app.services.memory import memory_manager
+from app.adk.main_graph import bodyflow_graph
 import logging
 
 # Configuração de logging
@@ -31,8 +32,34 @@ async def webhook_whatsapp(request: Request):
         
         logger.info(f"Mensagem recebida de {from_number}: {message_body}")
         
-        # Resposta simples temporária - será substituída pela nova orquestração
-        resposta = "Ola! BodyFlow em reconstrucao. Nova versao em breve!"
+        # Processa mensagem através do grafo ADK
+        try:
+            # Determina tipo de conteúdo
+            content_type = "text"
+            image_data = None
+            
+            # Verifica se há imagem (placeholder para implementação futura)
+            # if form_data.get("MediaUrl0"):
+            #     content_type = "image"
+            #     # image_data = await download_image(form_data.get("MediaUrl0"))
+            
+            # Processa através do grafo ADK
+            graph_result = await bodyflow_graph.process_message(
+                user_id=from_number,
+                content=message_body,
+                channel="whatsapp",
+                content_type=content_type,
+                image_data=image_data
+            )
+            
+            if graph_result.get("success"):
+                resposta = graph_result.get("response", "Resposta não disponível")
+            else:
+                resposta = graph_result.get("response", "Erro interno do sistema")
+                
+        except Exception as e:
+            logger.error(f"Erro no processamento ADK: {e}")
+            resposta = "Erro interno do sistema. Tente novamente."
         
         # Limpa a resposta para compatibilidade com WhatsApp
         resposta_limpa = _clean_message_for_whatsapp(resposta)
@@ -58,10 +85,14 @@ async def status_webhook():
     """
     Endpoint para verificar status do webhook
     """
+    # Verifica status do grafo ADK
+    graph_status = await bodyflow_graph.get_graph_status()
+    
     return {
         "status": "active",
         "service": "BodyFlow WhatsApp Bot",
-        "version": "1.0.0"
+        "version": "2.0.0",
+        "adk_status": graph_status
     }
 
 @whatsapp_router.post("/status-callback")

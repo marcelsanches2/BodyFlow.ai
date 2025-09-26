@@ -112,17 +112,11 @@ async def test_webhook_logic(
             }
         
         # Simula processamento normal
-        if "treino" in message.lower():
+        if "treino" in message.lower() or "dieta" in message.lower() or "nutricionista" in message.lower():
             return {
-                "response": UserMessages.Treino.PERNAS_RESPONSE,
+                "response": "Resposta do Super Personal Trainer",
                 "status": "processed",
-                "agent": "treino"
-            }
-        elif "dieta" in message.lower():
-            return {
-                "response": UserMessages.Dieta.PERDER_PESO_RESPONSE,
-                "status": "processed",
-                "agent": "dieta"
+                "agent": "super_personal_trainer"
             }
         else:
             return {
