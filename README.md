@@ -1,249 +1,106 @@
-# BodyFlow Backend 🤖💪
+# BodyFlow.ai Backend
 
-Backend para chatbot de fitness usando **FastAPI**, **Google ADK** e **Supabase** para responder mensagens do WhatsApp via Twilio.
+Sistema de IA para análise nutricional e treino personalizado usando Google ADK.
 
-## 📋 Funcionalidades
+## 🚀 Configuração Rápida
 
-- ✅ **Webhook WhatsApp**: Recebe mensagens do Twilio e responde em formato TwiML
-- ✅ **Agentes de IA**: Sistema de agentes especializados usando Google ADK
-- ✅ **Roteamento Inteligente**: Direciona mensagens para agentes específicos
-- ✅ **Memória Persistente**: Salva histórico no Supabase
-- ✅ **Dois Agentes Especializados**:
-  - 🏋️ **AgenteTreino**: Sugestões de exercícios e treinos
-  - 🥗 **AgenteDieta**: Planos alimentares e nutrição
-
-## 🏗️ Arquitetura
-
-```
-📂 bodyflow-backend/
-├── app/
-│   ├── main.py          # Entrypoint FastAPI
-│   ├── whatsapp.py      # Webhook Twilio WhatsApp
-│   ├── graph.py         # Grafo de agentes (Google ADK)
-│   ├── memory.py        # Camada de memória (Supabase)
-│   └── agents/
-│       ├── __init__.py
-│       ├── treino.py    # Agente de treinos
-│       └── dieta.py     # Agente de dietas
-├── requirements.txt     # Dependências Python
-├── config.py           # Configurações
-└── README.md
-```
-
-## 🚀 Instalação e Configuração
-
-### 1. Clone e Instale Dependências
-
+### 1. Instalar Dependências
 ```bash
-cd bodyflow-backend
 pip install -r requirements.txt
 ```
 
-### 2. Configure Variáveis de Ambiente
+### 2. Configurar Variáveis de Ambiente
 
-Crie um arquivo `.env` na raiz do projeto:
-
-```env
-# Supabase Configuration
-SUPABASE_URL=https://seu-projeto.supabase.co
-SUPABASE_KEY=sua_chave_anonima_aqui
-
-# Twilio Configuration  
-TWILIO_AUTH_TOKEN=seu_auth_token_twilio
-
-# Application Configuration
-DEBUG=True
-PORT=8000
-```
-
-### 3. Configure o Supabase
-
-Execute este SQL no **Supabase SQL Editor**:
-
-```sql
-CREATE TABLE IF NOT EXISTS messages (
-    id SERIAL PRIMARY KEY,
-    phone VARCHAR(20) NOT NULL,
-    body TEXT NOT NULL,
-    direction VARCHAR(10) NOT NULL CHECK (direction IN ('inbound', 'outbound')),
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_messages_phone ON messages(phone);
-CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at);
-```
-
-### 4. Execute a Aplicação
-
+**Opção A: Usando arquivo .env (Recomendado)**
 ```bash
-# Desenvolvimento
-python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+# Copie o arquivo de exemplo
+cp .env_example .env
 
-# Produção
-python app/main.py
+# Edite o .env com suas chaves reais
+nano .env
 ```
 
-## 📱 Configuração do Twilio WhatsApp
-
-### 1. Configure o Webhook
-
-No console do Twilio, configure o webhook para:
-```
-https://seu-dominio.com/whatsapp/
-```
-
-### 2. Teste o Webhook
-
-Use o endpoint de teste:
+**Opção B: Usando setup_env.py**
 ```bash
-curl -X POST "http://localhost:8000/whatsapp/test" \
-  -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "phone=+5511999999999&message=quero treino de pernas"
+# O script detectará automaticamente se existe .env
+python3 setup_env.py
 ```
 
-## 🎯 Como Funciona
-
-### 1. Fluxo de Mensagens
-
-```
-WhatsApp → Twilio → Webhook → Grafo ADK → Agente Específico → Resposta → Twilio → WhatsApp
-```
-
-### 2. Roteamento Inteligente
-
-O sistema identifica automaticamente o tipo de consulta:
-
-- **Palavras-chave de TREINO**: `treino`, `exercício`, `academia`, `perna`, `peito`, `costas`, etc.
-- **Palavras-chave de DIETA**: `dieta`, `alimentação`, `nutrição`, `emagrecer`, `massa`, etc.
-- **Resposta padrão**: Para mensagens não identificadas
-
-### 3. Memória Contextual
-
-- Salva todas as mensagens no Supabase
-- Carrega últimas 5 mensagens como contexto
-- Mantém histórico da conversa
-
-## 🧪 Testando o Sistema
-
-### 1. Endpoint de Teste
-
+### 3. Executar o Sistema
 ```bash
-curl -X POST "http://localhost:8000/whatsapp/test" \
-  -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "phone=+5511999999999&message=quero treino de pernas"
+python3 -m uvicorn app.main:app --reload --port 8000
 ```
 
-### 2. Exemplos de Mensagens
+## 🔑 Variáveis de Ambiente Necessárias
 
-**Treinos:**
-- "quero treino de pernas"
-- "me ajuda com exercícios de peito"
-- "treino completo para academia"
+| Variável | Descrição | Exemplo |
+|----------|-----------|---------|
+| `ANTHROPIC_API_KEY` | Chave da API Anthropic | `sk-ant-api03-...` |
+| `SUPABASE_URL` | URL do projeto Supabase | `https://xxx.supabase.co` |
+| `SUPABASE_KEY` | Chave anônima do Supabase | `eyJhbGciOiJIUzI1NiIs...` |
+| `TELEGRAM_BOT_TOKEN` | Token do bot do Telegram | `1234567890:ABC...` |
 
-**Dietas:**
-- "preciso de dieta para emagrecer"
-- "quero ganhar massa muscular"
-- "alimentação saudável"
+## 📁 Estrutura do Projeto
 
-### 3. Verificar Status
+```
+bodyflow-backend/
+├── app/
+│   ├── adk/                 # Google ADK - Orquestração
+│   │   ├── agents/          # Agentes de IA
+│   │   ├── main_graph.py    # Grafo principal
+│   │   └── ...
+│   ├── api/                 # APIs REST
+│   ├── services/           # Serviços (memória, sessão)
+│   └── tools/              # Ferramentas (multimodal, memória)
+├── .env_example            # Exemplo de configuração
+├── setup_env.py           # Script de configuração
+└── requirements.txt       # Dependências Python
+```
 
+## 🤖 Agentes Disponíveis
+
+- **Onboarding Agent**: Cadastro e atualização de perfil
+- **Super Personal Trainer Agent**: Análise nutricional, treino e saúde
+
+## 🔄 Fluxo de Mensagens
+
+1. **Telegram/WhatsApp** → `RouterNode`
+2. **RouterNode** → `TextOrchestrator` ou `ImageOrchestrator`
+3. **Orchestrator** → `SuperPersonalTrainerAgent`
+4. **Agent** → Resposta personalizada
+
+## 🧠 Recursos de IA
+
+- **Análise de Imagens**: Identificação de alimentos, estimativa de calorias
+- **Memória Persistente**: Histórico de conversas em 3 camadas
+- **Sessões Ativas**: Continuidade de contexto entre mensagens
+- **Multimodal**: Processamento de texto e imagem simultaneamente
+
+## 🛠️ Desenvolvimento
+
+### Testes Locais
 ```bash
-curl http://localhost:8000/health
-curl http://localhost:8000/stats
+# Teste básico
+python3 -c "exec(open('setup_env.py').read()); from app.adk.main_graph import MainGraph; print('✅ Sistema OK')"
+
+# Teste com imagem
+python3 app/api/test/test_endpoints.py
 ```
 
-## 📊 Endpoints da API
+### Logs e Debug
+- Logs são salvos em `logs/`
+- Use `DEBUG=True` no `.env` para logs detalhados
 
-| Endpoint | Método | Descrição |
-|----------|--------|-----------|
-| `/` | GET | Informações da API |
-| `/health` | GET | Status da aplicação |
-| `/stats` | GET | Estatísticas |
-| `/whatsapp/` | POST | Webhook Twilio |
-| `/whatsapp/test` | POST | Teste sem Twilio |
-| `/whatsapp/status` | GET | Status do webhook |
-| `/docs` | GET | Documentação Swagger |
+## 🔒 Segurança
 
-## 🔧 Desenvolvimento
+- ✅ Chaves sensíveis são carregadas apenas do arquivo `.env`
+- ✅ Arquivo `.env` está no `.gitignore`
+- ✅ Arquivos de exemplo usam placeholders
+- ✅ Chaves são mascaradas nos logs
 
-### Estrutura dos Agentes
+## 📞 Suporte
 
-Cada agente herda de uma classe base e implementa:
-
-```python
-class MeuAgente:
-    async def processar(self, estado: Dict[str, Any]) -> Dict[str, Any]:
-        # Lógica do agente
-        estado["resposta"] = "Resposta do agente"
-        estado["agente_usado"] = "MeuAgente"
-        return estado
-```
-
-### Adicionando Novos Agentes
-
-1. Crie um novo arquivo em `app/agents/`
-2. Implemente a classe do agente
-3. Adicione no `graph.py`:
-   - Novo nó do agente
-   - Condição de roteamento
-   - Conexão no grafo
-
-### Logs e Debugging
-
-```bash
-# Logs detalhados
-export LOG_LEVEL=DEBUG
-python app/main.py
-```
-
-## 🚀 Deploy
-
-### 1. Docker (Recomendado)
-
-```dockerfile
-FROM python:3.11-slim
-
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install -r requirements.txt
-
-COPY . .
-EXPOSE 8000
-
-CMD ["python", "app/main.py"]
-```
-
-### 2. Railway/Render/Vercel
-
-Configure as variáveis de ambiente e faça deploy do código.
-
-## 📝 Próximos Passos
-
-- [ ] Adicionar mais agentes (suplementos, recuperação, etc.)
-- [ ] Implementar autenticação de usuários
-- [ ] Adicionar métricas e analytics
-- [ ] Integração com APIs de fitness
-- [ ] Sistema de agendamento de treinos
-- [ ] Chatbot com IA generativa (GPT/Claude)
-
-## 🤝 Contribuição
-
-1. Fork o projeto
-2. Crie uma branch (`git checkout -b feature/nova-funcionalidade`)
-3. Commit suas mudanças (`git commit -am 'Adiciona nova funcionalidade'`)
-4. Push para a branch (`git push origin feature/nova-funcionalidade`)
-5. Abra um Pull Request
-
-## 📄 Licença
-
-Este projeto está sob a licença MIT. Veja o arquivo `LICENSE` para mais detalhes.
-
-## 🆘 Suporte
-
-- 📧 Email: suporte@bodyflow.ai
-- 💬 Discord: [Link do servidor]
-- 📖 Documentação: `/docs` (Swagger UI)
-
----
-
-**BodyFlow Backend** - Transformando fitness em conversas inteligentes! 💪🤖
+Para dúvidas ou problemas, verifique:
+1. Se todas as variáveis de ambiente estão configuradas
+2. Se as chaves de API são válidas
+3. Se o arquivo `.env` existe e está no diretório correto
