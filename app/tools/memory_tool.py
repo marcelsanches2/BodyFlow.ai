@@ -91,18 +91,24 @@ class MemoryTool(Tool):
             return {}
     
     async def _get_user_profile_data(self, user_id: str) -> Dict[str, Any]:
-        """Busca dados de perfil da tabela user_profile"""
+        """Busca dados de perfil da tabela user_profile e nome da tabela customers"""
         try:
             from app.core.config import Config
             from supabase import create_client
             
             supabase = create_client(Config.SUPABASE_URL, Config.SUPABASE_KEY)
-            result = supabase.table('user_profile').select('*').eq('user_id', user_id).execute()
             
-            if result.data:
-                profile = result.data[0]
-                return {
-                    "name": profile.get("name"),
+            # Busca dados de perfil da tabela user_profile
+            profile_result = supabase.table('user_profile').select('*').eq('user_id', user_id).execute()
+            
+            # Busca nome da tabela customers
+            customer_result = supabase.table('customers').select('name').eq('id', user_id).execute()
+            
+            profile_data = {}
+            
+            if profile_result.data:
+                profile = profile_result.data[0]
+                profile_data = {
                     "age": profile.get("age"),
                     "height_cm": profile.get("height_cm"),
                     "current_weight_kg": profile.get("current_weight_kg"),
@@ -114,7 +120,15 @@ class MemoryTool(Tool):
                     "updated_at": profile.get("updated_at"),
                     "created_at": profile.get("created_at")
                 }
-            return {}
+            
+            # Adiciona primeiro nome da tabela customers
+            if customer_result.data:
+                full_name = customer_result.data[0].get("name", "")
+                # Extrai apenas o primeiro nome
+                first_name = full_name.split()[0] if full_name else ""
+                profile_data["name"] = first_name
+            
+            return profile_data
         except Exception as e:
             print(f"❌ MemoryTool: Erro ao buscar dados de perfil: {e}")
             return {}

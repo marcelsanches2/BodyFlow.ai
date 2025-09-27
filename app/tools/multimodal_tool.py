@@ -8,6 +8,7 @@ from app.adk.simple_adk import Tool
 from PIL import Image
 import io
 import base64
+from app.services.llm_service import llm_service
 
 class MultimodalTool(Tool):
     """Tool multimodal para análise de imagens"""
@@ -58,19 +59,30 @@ class MultimodalTool(Tool):
     
     async def extract_bioimpedance_data(self, image_data: bytes) -> Dict[str, Any]:
         """
-        Extrai dados de relatório de bioimpedância (placeholder)
+        Extrai dados de relatório de bioimpedância usando LLM
         """
         try:
-            # Placeholder para extração real de dados
-            extracted_data = await self._placeholder_extract_bioimpedance(image_data)
+            print(f"📊 MultimodalTool: Iniciando análise de bioimpedância...")
+            print(f"📊 Tamanho da imagem: {len(image_data)} bytes")
+            
+            # Converte imagem para base64 para envio ao LLM
+            image_base64 = base64.b64encode(image_data).decode('utf-8')
+            print(f"🔄 MultimodalTool: Imagem convertida para base64 ({len(image_base64)} caracteres)")
+            
+            # Analisa usando LLM
+            analysis = await self._analyze_bioimpedance_with_llm(image_base64)
+            
+            print(f"✅ MultimodalTool: Análise de bioimpedância finalizada com sucesso!")
+            print(f"📋 Resultado final: {analysis}")
             
             return {
                 "success": True,
-                "data": extracted_data,
-                "confidence": extracted_data.get("confidence", 0.5)
+                "data": analysis,
+                "confidence": analysis.get("confidence", 0.5)
             }
             
         except Exception as e:
+            print(f"❌ Erro na extração de bioimpedância: {e}")
             return {
                 "success": False,
                 "error": str(e)[:100],
@@ -82,11 +94,18 @@ class MultimodalTool(Tool):
         Analisa imagem de alimentos usando LLM
         """
         try:
+            print(f"🍽️ MultimodalTool: Iniciando análise de imagem de comida...")
+            print(f"📊 Tamanho da imagem: {len(image_data)} bytes")
+            
             # Converte imagem para base64 para envio ao LLM
             image_base64 = base64.b64encode(image_data).decode('utf-8')
+            print(f"🔄 MultimodalTool: Imagem convertida para base64 ({len(image_base64)} caracteres)")
             
             # Analisa usando LLM da Anthropic
             analysis = await self._analyze_food_with_llm(image_base64)
+            
+            print(f"✅ MultimodalTool: Análise de comida finalizada com sucesso!")
+            print(f"📋 Resultado final: {analysis}")
             
             return {
                 "success": True,
@@ -106,133 +125,521 @@ class MultimodalTool(Tool):
     
     async def _placeholder_classify(self, image: Image.Image, image_type: str) -> Dict[str, Any]:
         """
-        Placeholder para classificação de imagem
+        Classificação robusta de imagem usando LLM
         """
-        # Simulação de classificação baseada em características básicas
-        width, height = image.size
-        aspect_ratio = width / height
-        
-        # Lógica placeholder melhorada
-        if image_type == "bioimpedancia":
-            return {"type": "bioimpedancia", "confidence": 0.8}
-        elif image_type == "food":
-            return {"type": "food", "confidence": 0.7}
-        elif image_type == "exercise":
-            return {"type": "exercise", "confidence": 0.6}
-        elif image_type == "body":
-            return {"type": "body", "confidence": 0.6}
-        elif image_type == "label":
-            return {"type": "label", "confidence": 0.7}
-        else:
-            # Classificação baseada em características da imagem
-            if aspect_ratio > 1.5:  # Muito horizontal (pode ser relatório)
-                return {"type": "bioimpedancia", "confidence": 0.5}
-            elif aspect_ratio < 0.8:  # Muito vertical (pode ser pessoa)
-                return {"type": "body", "confidence": 0.4}
-            else:  # Quadrado ou pouco horizontal/vertical
-                return {"type": "food", "confidence": 0.4}
+        try:
+            # Converte imagem para base64 para análise com LLM
+            import base64
+            img_buffer = io.BytesIO()
+            image.save(img_buffer, format='JPEG', quality=85)
+            img_base64 = base64.b64encode(img_buffer.getvalue()).decode()
+            
+            # Prompt robusto para classificação
+            prompt = f"""
+Você é um especialista em análise visual de imagens relacionadas à nutrição, treino e saúde.
+Sua tarefa é identificar o conteúdo principal da imagem e classificá-la em exatamente uma das categorias abaixo:
+	•	food → comida, pratos, refeições, ingredientes ou alimentos (mesmo que apareçam mãos, pés, mesas ou outros elementos secundários).
+	•	bioimpedancia → relatórios ou gráficos de composição corporal, tabelas médicas de percentual de gordura, massa magra, etc.
+	•	exercise → pessoas realizando exercícios físicos, academias ou equipamentos de treino em uso.
+	•	body → fotos corporais ou selfies de pessoas, desde que não haja comida nem prática de exercício.
+	•	label → rótulos de produtos, informações nutricionais, tabelas de ingredientes impressas em embalagens.
+	•	treino_planilha → planilhas, tabelas ou listas de treino (em papel, foto de caderno, print digital ou aplicativo).
+
+Regras de Classificação
+	1.	Se houver qualquer presença de comida/alimento → classifique como food.
+	2.	Se for relatório de composição corporal → bioimpedancia.
+	3.	Se mostrar pessoa treinando ou equipamento de treino → exercise.
+	4.	Se for uma foto de corpo/selfie sem comida → body.
+	5.	Se for rótulo ou tabela nutricional → label.
+	6.	Se for planilha ou tabela de treino (mesmo manuscrita ou digital) → treino_planilha.
+
+Saída esperada
+
+Responda apenas com a categoria final:
+food, bioimpedancia, exercise, body, label, ou treino_planilha.
+
+⸻
+
+RESPONDA APENAS COM JSON:
+{{
+    "type": "categoria_principal",
+    "confidence": 0.8,
+    "reasoning": "explicação_breve"
+}}
+"""
+            
+            # Usa LLM para classificação robusta
+            response = await llm_service.call_with_fallback(
+                messages=[
+                    {
+                        "role": "user", 
+                        "content": [
+                            {"type": "text", "text": prompt},
+                            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_base64}"}}
+                        ]
+                    }
+                ],
+                max_tokens=200,
+                temperature=0.1
+            )
+            
+            # Extrai JSON da resposta
+            import json
+            try:
+                if "```json" in response:
+                    response = response.split("```json")[1].split("```")[0]
+                elif "```" in response:
+                    response = response.split("```")[1].split("```")[0]
+                
+                classification = json.loads(response.strip())
+                return classification
+                
+            except json.JSONDecodeError:
+                # Fallback se não conseguir parsear JSON
+                return {"type": "food", "confidence": 0.6, "reasoning": "LLM response parse error"}
+                
+        except Exception as e:
+            print(f"❌ Erro na classificação LLM: {e}")
+            # Fallback para classificação básica
+            width, height = image.size
+            aspect_ratio = width / height
+            
+            if image_type == "bioimpedancia":
+                return {"type": "bioimpedancia", "confidence": 0.8}
+            elif image_type == "food":
+                return {"type": "food", "confidence": 0.7}
+            elif image_type == "exercise":
+                return {"type": "exercise", "confidence": 0.6}
+            elif image_type == "body":
+                return {"type": "body", "confidence": 0.6}
+            elif image_type == "label":
+                return {"type": "label", "confidence": 0.7}
+            else:
+                # Classificação baseada em características da imagem
+                if aspect_ratio > 1.5:  # Muito horizontal (pode ser relatório)
+                    return {"type": "bioimpedancia", "confidence": 0.5}
+                elif aspect_ratio < 0.8:  # Muito vertical (pode ser pessoa)
+                    return {"type": "body", "confidence": 0.4}
+                else:  # Quadrado ou pouco horizontal/vertical
+                    return {"type": "food", "confidence": 0.4}
     
-    async def _placeholder_extract_bioimpedance(self, image_data: bytes) -> Dict[str, Any]:
+    async def _analyze_bioimpedance_with_llm(self, image_base64: str) -> Dict[str, Any]:
         """
-        Placeholder para extração de dados de bioimpedância
+        Analisa imagem de relatório de bioimpedância usando LiteLLM
         """
-        # Simulação de dados extraídos
-        return {
-            "weight": 70.5,
-            "body_fat_percentage": 15.2,
-            "muscle_mass": 58.3,
-            "water_percentage": 60.1,
-            "confidence": 0.7,
-            "extraction_method": "placeholder"
-        }
+        try:
+            prompt = """
+Analise cuidadosamente a **imagem de relatório de bioimpedância** e extraia todos os dados visíveis.
+
+**Regras obrigatórias para a análise**:
+1. Identifique todos os valores numéricos relacionados à composição corporal.
+2. Use os valores exatos mostrados na imagem quando possível.
+3. Se um valor não estiver visível ou legível, use "unknown" e faça estimativa conservadora.
+4. Sempre inclua um campo `"confidence"` entre 0.0 e 1.0 para indicar o grau de confiança da análise.
+5. Retorne **apenas** um JSON válido (nenhum texto fora do JSON).
+6. Inclua o campo `"analysis_method": "llm_analysis"` fixo.
+7. Inclua o campo `"reasoning"` com explicação detalhada da análise realizada.
+
+**CAMPOS OBRIGATÓRIOS PARA EXTRAIR**:
+- `weight_kg`: Peso corporal em kg
+- `body_fat_percent`: Percentual de gordura corporal
+- `muscle_mass_kg`: Massa muscular em kg
+- `visceral_fat_level`: Nível de gordura visceral (1-59)
+- `basal_metabolic_rate`: Taxa metabólica basal em kcal
+- `hydration_percent`: Percentual de hidratação
+- `bone_mass_kg`: Massa óssea em kg
+- `date`: Data do exame (formato DD/MM/YYYY)
+
+**IMPORTANTE - FORMATO JSON OBRIGATÓRIO**:
+- Use apenas aspas duplas (")
+- NUNCA use vírgulas finais após o último item de arrays ou objetos
+- Todos os números devem ser números, não strings
+- Certifique-se de que o JSON está bem formado
+- Evite caracteres especiais ou quebras de linha dentro de strings
+- SEMPRE termine com } (chave de fechamento)
+- SEMPRE termine arrays com ] (colchete de fechamento)
+- Exemplo de estrutura correta:
+
+```json
+{
+  "weight_kg": 70.5,
+  "body_fat_percent": 15.2,
+  "muscle_mass_kg": 58.3,
+  "visceral_fat_level": 8,
+  "basal_metabolic_rate": 1650,
+  "hydration_percent": 60.1,
+  "bone_mass_kg": 2.8,
+  "date": "15/12/2024",
+  "confidence": 0.8,
+  "analysis_method": "llm_analysis",
+  "reasoning": "Identifiquei claramente todos os valores principais do relatório de bioimpedância"
+}
+```
+
+**ESTRATÉGIA DE ESTIMATIVA CONSERVADORA**:
+- **Peso**: Se não conseguir ler, estime baseado no contexto visual
+- **Gordura corporal**: Se não conseguir ler, use estimativa conservadora baseada no visual
+- **Massa muscular**: Se não conseguir ler, estime baseado no peso e gordura
+- **Data**: Se não conseguir ler, use "unknown"
+
+**INSTRUÇÕES ESPECÍFICAS**:
+- Procure por tabelas, gráficos ou valores destacados
+- Identifique unidades de medida (kg, %, kcal, etc.)
+- Se houver múltiplas medições, use a mais recente ou principal
+- Se valores estiverem em diferentes unidades, converta para as unidades padrão
+- Se a imagem estiver borrada ou ilegível, indique baixa confiança (0.1-0.3)
+
+Retorne apenas o JSON válido, sem texto adicional.
+"""
+            
+            # Usa LiteLLM para análise multimodal com formato compatível
+            response = await llm_service.call_with_fallback(
+                messages=[{
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": prompt
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{image_base64}"
+                            }
+                        }
+                    ]
+                }],
+                max_tokens=500,
+                temperature=0.1
+            )
+            
+            # Log da resposta bruta do LLM
+            print(f"📊 MultimodalTool: Resposta bruta do LLM para análise de bioimpedância:")
+            print(f"📝 Resposta: {response[:500]}...")
+            
+            # Extrai JSON da resposta com limpeza robusta
+            import json
+            import re
+            
+            # Limpa a resposta removendo texto antes e depois do JSON
+            cleaned_response = response.strip()
+            
+            # Remove possíveis markdown ou texto extra
+            if "```json" in cleaned_response:
+                cleaned_response = cleaned_response.split("```json")[1].split("```")[0]
+            elif "```" in cleaned_response:
+                cleaned_response = cleaned_response.split("```")[1].split("```")[0]
+            
+            # Procura por JSON na resposta usando múltiplas estratégias
+            json_str = None
+            
+            # Estratégia 1: Procura por JSON completo
+            json_match = re.search(r'\{.*\}', cleaned_response, re.DOTALL)
+            if json_match:
+                json_str = json_match.group()
+            
+            # Estratégia 2: Se não encontrou, tenta encontrar o primeiro { até o último }
+            if not json_str:
+                start_idx = cleaned_response.find('{')
+                end_idx = cleaned_response.rfind('}')
+                if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+                    json_str = cleaned_response[start_idx:end_idx+1]
+            
+            if json_str:
+                # Limpa o JSON de possíveis caracteres problemáticos
+                json_str = json_str.strip()
+                
+                # Remove vírgulas finais problemáticas
+                json_str = re.sub(r',\s*}', '}', json_str)
+                json_str = re.sub(r',\s*]', ']', json_str)
+                
+                # Verifica se o JSON está completo
+                open_braces = json_str.count('{')
+                close_braces = json_str.count('}')
+                open_brackets = json_str.count('[')
+                close_brackets = json_str.count(']')
+                
+                # Se o JSON está incompleto, tenta completar
+                if open_braces > close_braces:
+                    missing_braces = open_braces - close_braces
+                    json_str += '}' * missing_braces
+                
+                if open_brackets > close_brackets:
+                    missing_brackets = open_brackets - close_brackets
+                    json_str += ']' * missing_brackets
+                
+                # Log do JSON limpo para debug
+                print(f"🔍 MultimodalTool: JSON extraído e limpo:")
+                print(f"📝 JSON: {json_str[:300]}...")
+                
+                try:
+                    analysis = json.loads(json_str)
+                    
+                    # Log do resultado da análise
+                    print(f"✅ MultimodalTool: Análise de bioimpedância concluída com sucesso!")
+                    print(f"📊 Peso: {analysis.get('weight_kg', 'N/A')} kg")
+                    print(f"📊 Gordura corporal: {analysis.get('body_fat_percent', 'N/A')}%")
+                    print(f"📊 Massa muscular: {analysis.get('muscle_mass_kg', 'N/A')} kg")
+                    print(f"📊 Gordura visceral: {analysis.get('visceral_fat_level', 'N/A')}")
+                    print(f"📊 Taxa metabólica: {analysis.get('basal_metabolic_rate', 'N/A')} kcal")
+                    print(f"📊 Hidratação: {analysis.get('hydration_percent', 'N/A')}%")
+                    print(f"📊 Massa óssea: {analysis.get('bone_mass_kg', 'N/A')} kg")
+                    print(f"📅 Data: {analysis.get('date', 'N/A')}")
+                    print(f"📈 Confiança: {analysis.get('confidence', 0):.1%}")
+                    print(f"🔧 Método: {analysis.get('analysis_method', 'unknown')}")
+                    print(f"🧠 Reasoning: {analysis.get('reasoning', 'Não fornecido')}")
+                    
+                    return analysis
+                    
+                except json.JSONDecodeError as json_error:
+                    print(f"❌ MultimodalTool: Erro ao parsear JSON: {json_error}")
+                    print(f"❌ MultimodalTool: JSON problemático: {json_str}")
+                    print(f"❌ MultimodalTool: Resposta original: {response[:500]}...")
+                    raise Exception(f"JSON inválido retornado pelo LLM: {str(json_error)}")
+            else:
+                print(f"❌ MultimodalTool: Resposta não contém JSON válido")
+                print(f"📝 Resposta completa: {response}")
+                raise Exception("Resposta não contém JSON válido")
+                    
+        except Exception as e:
+            print(f"❌ Erro na análise LLM: {e}")
+            # Retorna análise placeholder em caso de erro
+            return {
+                "weight_kg": 70.5,
+                "body_fat_percent": 15.2,
+                "muscle_mass_kg": 58.3,
+                "visceral_fat_level": 8,
+                "basal_metabolic_rate": 1650,
+                "hydration_percent": 60.1,
+                "bone_mass_kg": 2.8,
+                "date": "unknown",
+                "confidence": 0.3,
+                "analysis_method": "llm_error_fallback",
+                "reasoning": f"Erro na análise LLM: {str(e)}"
+            }
     
     async def _analyze_food_with_llm(self, image_base64: str) -> Dict[str, Any]:
         """
-        Analisa imagem de comida usando LLM da Anthropic
+        Analisa imagem de comida usando LiteLLM
         """
         try:
-            import os
-            import httpx
-            
-            api_key = os.getenv("ANTHROPIC_API_KEY")
-            if not api_key:
-                raise Exception("ANTHROPIC_API_KEY não configurada")
-            
             prompt = """
-Analise esta imagem de comida e forneça informações nutricionais específicas.
+Analise cuidadosamente a **imagem enviada de comida** e identifique todos os alimentos visíveis.  
 
-Retorne APENAS um JSON válido com a seguinte estrutura:
+**Regras obrigatórias para a análise**:  
+1. Liste cada alimento identificado em `"food_items"`.  
+2.	Para cada alimento, estime a quantidade aproximada em gramas usando faixas comuns de porções (ex.: 50g, 100g, 150g, 200g).
+	•	**SEMPRE ESTIME PARA CIMA**: Se houver dúvida entre duas quantidades, escolha a maior.
+	•	Se não for possível estimar, use "quantity_grams": "unknown" e faça estimativas conservadoras de calorias e macros.
+3. Use tabelas nutricionais padrão (USDA, TACO ou equivalentes) como referência para calcular calorias e macronutrientes.  
+4. Some os valores de cada item para calcular o **total** (campo `"estimated_calories"` e `"macronutrients"`).  
+5. Se não conseguir identificar claramente um alimento, use `"unknown"` e faça uma estimativa conservadora.  
+6. **ESTIMATIVA CONSERVADORA**: Sempre arredonde calorias e macronutrientes para cima quando houver dúvida.
+7. Sempre inclua um campo `"confidence"` entre 0.0 e 1.0 para indicar o grau de confiança da análise.  
+8. Retorne **apenas** um JSON válido (nenhum texto fora do JSON).  
+9. Inclua o campo `"analysis_method": "llm_analysis"` fixo.
+
+**IMPORTANTE - FORMATO JSON OBRIGATÓRIO:**
+- Use apenas aspas duplas (")
+- NUNCA use vírgulas finais após o último item de arrays ou objetos
+- Todos os números devem ser números, não strings
+- Certifique-se de que o JSON está bem formado
+- Evite caracteres especiais ou quebras de linha dentro de strings
+- SEMPRE termine com } (chave de fechamento)
+- SEMPRE termine arrays com ] (colchete de fechamento)
+- Exemplo de estrutura correta:
+
+```json
 {
-    "food_items": ["lista", "de", "alimentos", "identificados"],
-    "estimated_calories": número_total_de_calorias,
-    "macronutrients": {
-        "protein": gramas_de_proteína,
-        "carbs": gramas_de_carboidratos,
-        "fat": gramas_de_gordura
+  "food_items": [
+    {
+      "name": "arroz branco",
+      "quantity_grams": 150,
+      "calories": 200,
+      "protein": 4,
+      "carbs": 45,
+      "fat": 0.5
     },
-    "confidence": 0.0_a_1.0,
-    "analysis_method": "llm_analysis"
+    {
+      "name": "frango grelhado",
+      "quantity_grams": 120,
+      "calories": 200,
+      "protein": 30,
+      "carbs": 0,
+      "fat": 8
+    },
+    {
+      "name": "feijão",
+      "quantity_grams": 100,
+      "calories": 130,
+      "protein": 8,
+      "carbs": 20,
+      "fat": 1
+    }
+  ],
+  "estimated_calories": 530,
+  "calorie_range": {
+    "min": 530,
+    "max": 689
+  },
+  "macronutrients": {
+    "protein": 42,
+    "carbs": 65,
+    "fat": 9.5
+  },
+  "confidence": 0.8,
+  "analysis_method": "llm_analysis",
+  "reasoning": "Identifiquei claramente arroz branco, frango grelhado e feijão no prato"
 }
+```
 
-Seja específico e preciso. Se não conseguir identificar alimentos claramente, use "unknown" para food_items e estimativas conservadoras.
-"""
+**ESTRATÉGIA DE ESTIMATIVA CONSERVADORA:**
+- **Quantidade**: Se não tiver certeza se é 100g ou 150g, escolha 150g
+- **Calorias**: Se calcular 180 kcal, arredonde para 200 kcal
+- **Proteína**: Se calcular 22g, arredonde para 25g
+- **Carboidratos**: Se calcular 45g, arredonde para 50g
+- **Gordura**: Se calcular 8g, arredonde para 10g
+- **Princípio**: É melhor superestimar do que subestimar valores nutricionais
+
+**CÁLCULO DO RANGE DE CALORIAS CONSERVADOR:**
+- **Min**: Use o valor calculado como mínimo (não reduza)
+- **Max**: Adicione 20-30% ao valor calculado para o máximo
+- **Exemplo**: Se calcular 400 kcal → min: 400, max: 520 (400 + 30%)
+- **Exemplo**: Se calcular 250 kcal → min: 250, max: 325 (250 + 30%)
+- **Princípio**: O range deve ser conservador, sempre incluindo margem de segurança
+
+### Estrutura de saída obrigatória:
+```json
+{
+  "food_items": [
+    {
+      "name": "alimento_identificado",
+      "quantity_grams": número_em_gramas,
+      "calories": número_calorias,
+      "protein": gramas_proteina,
+      "carbs": gramas_carboidratos,
+      "fat": gramas_gordura
+    }
+  ],
+  "estimated_calories": total_de_calorias,
+  "calorie_range": {
+    "min": valor_mínimo_conservador,
+    "max": valor_máximo_conservador
+  },
+  "macronutrients": {
+    "protein": total_proteina,
+    "carbs": total_carboidratos,
+    "fat": total_gordura
+  },
+  "confidence": 0.0_a_1.0,
+  "analysis_method": "llm_analysis",
+  "reasoning": "explicação_detalhada_da_análise_realizada"
+}"""
             
-            headers = {
-                "x-api-key": api_key,
-                "Content-Type": "application/json",
-                "anthropic-version": "2023-06-01"
-            }
-            
-            data = {
-                "model": "claude-3-5-sonnet-20241022",
-                "max_tokens": 500,
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": prompt
-                            },
-                            {
-                                "type": "image",
-                                "source": {
-                                    "type": "base64",
-                                    "media_type": "image/jpeg",
-                                    "data": image_base64
-                                }
+            # Usa LiteLLM para análise multimodal com formato compatível
+            response = await llm_service.call_with_fallback(
+                messages=[{
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": prompt
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{image_base64}"
                             }
-                        ]
-                    }
-                ]
-            }
+                        }
+                    ]
+                }],
+                max_tokens=500,
+                temperature=0.1
+            )
             
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    "https://api.anthropic.com/v1/messages",
-                    headers=headers,
-                    json=data,
-                    timeout=30.0
-                )
+            # Log da resposta bruta do LLM
+            print(f"🍽️ MultimodalTool: Resposta bruta do LLM para análise de comida:")
+            print(f"📝 Resposta: {response[:500]}...")
+            
+            # Extrai JSON da resposta com limpeza robusta
+            import json
+            import re
+            
+            # Limpa a resposta removendo texto antes e depois do JSON
+            cleaned_response = response.strip()
+            
+            # Remove possíveis markdown ou texto extra
+            if "```json" in cleaned_response:
+                cleaned_response = cleaned_response.split("```json")[1].split("```")[0]
+            elif "```" in cleaned_response:
+                cleaned_response = cleaned_response.split("```")[1].split("```")[0]
+            
+            # Procura por JSON na resposta usando múltiplas estratégias
+            json_str = None
+            
+            # Estratégia 1: Procura por JSON completo
+            json_match = re.search(r'\{.*\}', cleaned_response, re.DOTALL)
+            if json_match:
+                json_str = json_match.group()
+            
+            # Estratégia 2: Se não encontrou, tenta encontrar o primeiro { até o último }
+            if not json_str:
+                start_idx = cleaned_response.find('{')
+                end_idx = cleaned_response.rfind('}')
+                if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+                    json_str = cleaned_response[start_idx:end_idx+1]
+            
+            if json_str:
+                # Limpa o JSON de possíveis caracteres problemáticos
+                json_str = json_str.strip()
                 
-                if response.status_code == 200:
-                    result = response.json()
-                    content = result["content"][0]["text"]
+                # Remove vírgulas finais problemáticas
+                json_str = re.sub(r',\s*}', '}', json_str)
+                json_str = re.sub(r',\s*]', ']', json_str)
+                
+                # Verifica se o JSON está completo
+                open_braces = json_str.count('{')
+                close_braces = json_str.count('}')
+                open_brackets = json_str.count('[')
+                close_brackets = json_str.count(']')
+                
+                # Se o JSON está incompleto, tenta completar
+                if open_braces > close_braces:
+                    missing_braces = open_braces - close_braces
+                    json_str += '}' * missing_braces
+                
+                if open_brackets > close_brackets:
+                    missing_brackets = open_brackets - close_brackets
+                    json_str += ']' * missing_brackets
+                
+                # Log do JSON limpo para debug
+                print(f"🔍 MultimodalTool: JSON extraído e limpo:")
+                print(f"📝 JSON: {json_str[:300]}...")
+                
+                try:
+                    analysis = json.loads(json_str)
                     
-                    # Extrai JSON da resposta
-                    import json
-                    import re
+                    # Log do resultado da análise
+                    print(f"✅ MultimodalTool: Análise de comida concluída com sucesso!")
+                    print(f"🍽️ Alimentos identificados: {analysis.get('food_items', [])}")
+                    print(f"🔥 Calorias estimadas: {analysis.get('estimated_calories', 0)} kcal")
+                    print(f"📊 Range de calorias: {analysis.get('calorie_range', {}).get('min', 0)}-{analysis.get('calorie_range', {}).get('max', 0)} kcal")
+                    print(f"🥩 Macronutrientes: {analysis.get('macronutrients', {})}")
+                    print(f"📈 Confiança: {analysis.get('confidence', 0):.1%}")
+                    print(f"🔧 Método: {analysis.get('analysis_method', 'unknown')}")
+                    print(f"🧠 Reasoning: {analysis.get('reasoning', 'Não fornecido')}")
                     
-                    # Procura por JSON na resposta
-                    json_match = re.search(r'\{.*\}', content, re.DOTALL)
-                    if json_match:
-                        json_str = json_match.group()
-                        analysis = json.loads(json_str)
-                        return analysis
-                    else:
-                        raise Exception("Resposta não contém JSON válido")
-                else:
-                    raise Exception(f"Erro na API: {response.status_code}")
+                    return analysis
+                    
+                except json.JSONDecodeError as json_error:
+                    print(f"❌ MultimodalTool: Erro ao parsear JSON: {json_error}")
+                    print(f"❌ MultimodalTool: JSON problemático: {json_str}")
+                    print(f"❌ MultimodalTool: Resposta original: {response[:500]}...")
+                    raise Exception(f"JSON inválido retornado pelo LLM: {str(json_error)}")
+            else:
+                print(f"❌ MultimodalTool: Resposta não contém JSON válido")
+                print(f"📝 Resposta completa: {response}")
+                raise Exception("Resposta não contém JSON válido")
                     
         except Exception as e:
             print(f"❌ Erro na análise LLM: {e}")
@@ -240,13 +647,18 @@ Seja específico e preciso. Se não conseguir identificar alimentos claramente, 
             return {
                 "food_items": ["unknown"],
                 "estimated_calories": 300,
+                "calorie_range": {
+                    "min": 300,
+                    "max": 390
+                },
                 "macronutrients": {
                     "protein": 20,
                     "carbs": 30,
                     "fat": 10
                 },
                 "confidence": 0.3,
-                "analysis_method": "llm_error_fallback"
+                "analysis_method": "llm_error_fallback",
+                "reasoning": f"Erro na análise LLM: {str(e)[:100]}"
             }
     
     async def _placeholder_analyze_food(self, image_data: bytes) -> Dict[str, Any]:

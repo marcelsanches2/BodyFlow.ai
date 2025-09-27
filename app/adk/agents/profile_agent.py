@@ -8,9 +8,9 @@ import time
 from typing import Dict, Any, Optional, List
 from datetime import datetime, date
 from app.adk.simple_adk import Node
-from anthropic import Anthropic
 from app.tools.memory_tool import MemoryTool
 from app.tools.observability_tool import ObservabilityTool
+from app.services.llm_service import llm_service
 
 class ProfileAgentNode(Node):
     """Agente responsável pelo gerenciamento completo do perfil do usuário"""
@@ -22,7 +22,6 @@ class ProfileAgentNode(Node):
         )
         self.memory_tool = MemoryTool()
         self.observability_tool = ObservabilityTool()
-        self.anthropic_client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
         
         # Estados do onboarding
         self.onboarding_steps = [
@@ -365,14 +364,13 @@ Seja inteligente: entenda o contexto e a intenção real por trás das palavras.
 Resposta (apenas o campo ou "null"):
 """
             
-            response = self.anthropic_client.messages.create(
-                model="claude-3-5-sonnet-20241022",
+            response = await llm_service.call_with_fallback(
+                messages=[{"role": "user", "content": prompt}],
                 max_tokens=20,
-                temperature=0.1,
-                messages=[{"role": "user", "content": prompt}]
+                temperature=0.1
             )
             
-            result = response.content[0].text.strip().lower()
+            result = response.strip().lower()
             valid_fields = ["age", "weight", "height", "goal", "training_level", "restrictions"]
             
             if result in valid_fields:
@@ -797,14 +795,13 @@ Seja inteligente na interpretação. Entenda a intenção real por trás das pal
 Resposta (apenas número ou "null"):
 """
             
-            response = self.anthropic_client.messages.create(
-                model="claude-3-5-sonnet-20241022",
+            response = await llm_service.call_with_fallback(
+                messages=[{"role": "user", "content": prompt}],
                 max_tokens=10,
-                temperature=0.1,
-                messages=[{"role": "user", "content": prompt}]
+                temperature=0.1
             )
             
-            result = response.content[0].text.strip()
+            result = response.strip()
             if result.lower() != "null" and result.isdigit():
                 age = int(result)
                 if 13 <= age <= 100:
@@ -842,14 +839,13 @@ Seja inteligente na interpretação. Entenda a intenção real por trás das pal
 Resposta (apenas número ou "null"):
 """
             
-            response = self.anthropic_client.messages.create(
-                model="claude-3-5-sonnet-20241022",
+            response = await llm_service.call_with_fallback(
+                messages=[{"role": "user", "content": prompt}],
                 max_tokens=10,
-                temperature=0.1,
-                messages=[{"role": "user", "content": prompt}]
+                temperature=0.1
             )
             
-            result = response.content[0].text.strip()
+            result = response.strip()
             if result.lower() != "null" and result.isdigit():
                 weight = int(result)
                 if 30 <= weight <= 200:
@@ -886,14 +882,13 @@ Seja inteligente na interpretação. Entenda a intenção real por trás das pal
 Resposta (apenas número ou "null"):
 """
             
-            response = self.anthropic_client.messages.create(
-                model="claude-3-5-sonnet-20241022",
+            response = await llm_service.call_with_fallback(
+                messages=[{"role": "user", "content": prompt}],
                 max_tokens=10,
-                temperature=0.1,
-                messages=[{"role": "user", "content": prompt}]
+                temperature=0.1
             )
             
-            result = response.content[0].text.strip()
+            result = response.strip()
             if result.lower() != "null" and result.isdigit():
                 height = int(result)
                 if 100 <= height <= 250:
@@ -913,15 +908,14 @@ Mensagem: "{content}"
 Resposta (JSON apenas):
 """
             
-            response = self.anthropic_client.messages.create(
-                model="claude-3-5-sonnet-20241022",
+            response = await llm_service.call_with_fallback(
+                messages=[{"role": "user", "content": prompt}],
                 max_tokens=50,
-                temperature=0.1,
-                messages=[{"role": "user", "content": prompt}]
+                temperature=0.1
             )
             
             import json
-            result = response.content[0].text.strip()
+            result = response.strip()
             if "{" in result and "}" in result:
                 json_start = result.find("{")
                 json_end = result.rfind("}") + 1
@@ -965,14 +959,13 @@ Seja inteligente na interpretação. Entenda a intenção real por trás das pal
 Resposta (apenas o objetivo ou "null"):
 """
             
-            response = self.anthropic_client.messages.create(
-                model="claude-3-5-sonnet-20241022",
+            response = await llm_service.call_with_fallback(
+                messages=[{"role": "user", "content": prompt}],
                 max_tokens=20,
-                temperature=0.1,
-                messages=[{"role": "user", "content": prompt}]
+                temperature=0.1
             )
             
-            result = response.content[0].text.strip().lower()
+            result = response.strip().lower()
             valid_goals = ["perder peso", "ganhar massa", "condicionamento", "manter peso", "reduzir gordura"]
             
             if result in valid_goals:
@@ -1013,14 +1006,13 @@ Seja inteligente na interpretação. Entenda a intenção real por trás das pal
 Resposta (apenas o nível ou "null"):
 """
             
-            response = self.anthropic_client.messages.create(
-                model="claude-3-5-sonnet-20241022",
+            response = await llm_service.call_with_fallback(
+                messages=[{"role": "user", "content": prompt}],
                 max_tokens=20,
-                temperature=0.1,
-                messages=[{"role": "user", "content": prompt}]
+                temperature=0.1
             )
             
-            result = response.content[0].text.strip().lower()
+            result = response.strip().lower()
             valid_levels = ["iniciante", "intermediário", "intermediario", "avançado", "avancado"]
             
             if result in valid_levels:
@@ -1061,14 +1053,13 @@ Seja inteligente na interpretação. Entenda a intenção real por trás das pal
 Resposta (apenas a restrição, "nenhuma" ou "null"):
 """
             
-            response = self.anthropic_client.messages.create(
-                model="claude-3-5-sonnet-20241022",
+            response = await llm_service.call_with_fallback(
+                messages=[{"role": "user", "content": prompt}],
                 max_tokens=30,
-                temperature=0.1,
-                messages=[{"role": "user", "content": prompt}]
+                temperature=0.1
             )
             
-            result = response.content[0].text.strip().lower()
+            result = response.strip().lower()
             
             if result == "null":
                 return None
@@ -1247,16 +1238,16 @@ EXEMPLOS DE INTERPRETAÇÃO:
 Responda APENAS com uma das 4 categorias (emagrecimento, hipertrofia, condicionamento, manutencao) ou "null" se não conseguir classificar.
 """
 
-            response = self.anthropic_client.messages.create(
-                model="claude-3-haiku-20240307",
-                max_tokens=50,
+            response = await llm_service.call_with_fallback(
                 messages=[{
                     "role": "user",
                     "content": prompt
-                }]
+                }],
+                max_tokens=50,
+                temperature=0.1
             )
             
-            result = response.content[0].text.strip().lower()
+            result = response.strip().lower()
             
             # Valida se o resultado é uma categoria válida
             valid_goals = ["emagrecimento", "hipertrofia", "condicionamento", "manutencao"]

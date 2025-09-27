@@ -286,10 +286,9 @@ class MemoryManager:
     async def update_user_profile(self, user_id: str, profile_data: Dict[str, Any]) -> bool:
         """Atualiza perfil do usuário na tabela user_profile"""
         try:
-            # Prepara dados para inserção/atualização na tabela user_profile
+            # Prepara dados para inserção/atualização na tabela user_profile (sem nome)
             data = {
                 "user_id": user_id,
-                "name": profile_data.get("name"),
                 "age": profile_data.get("age"),
                 "height_cm": profile_data.get("height_cm"),
                 "current_weight_kg": profile_data.get("current_weight_kg"),
@@ -317,7 +316,7 @@ class MemoryManager:
                 result = self.supabase.table("user_profile").insert(data).execute()
                 print(f"💾 MemoryManager: Criando novo perfil para user_id {user_id}: {len(result.data)} registro(s) criado(s)")
             
-            # Atualiza timestamp na tabela customers
+            # Atualiza apenas timestamp na tabela customers
             self.supabase.table("customers").update({
                 "last_profile_update": datetime.now().isoformat()
             }).eq("id", user_id).execute()

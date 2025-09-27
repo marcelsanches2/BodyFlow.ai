@@ -7,11 +7,11 @@ import time
 import os
 from typing import Dict, Any, Optional, List
 from app.adk.simple_adk import Node
-from anthropic import Anthropic
 from app.tools.memory_tool import MemoryTool
 from app.tools.observability_tool import ObservabilityTool
 from app.tools.multimodal_tool import MultimodalTool
 from app.services.session_manager import SessionManager
+from app.services.llm_service import llm_service
 
 class SuperPersonalTrainerAgentNode(Node):
     """Super Personal Trainer Agent - Agente principal responsável por saúde, nutrição e treino"""
@@ -24,7 +24,6 @@ class SuperPersonalTrainerAgentNode(Node):
         self.memory_tool = MemoryTool()
         self.observability_tool = ObservabilityTool()
         self.multimodal_tool = MultimodalTool()
-        self.anthropic_client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
     
     async def process(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -105,11 +104,21 @@ class SuperPersonalTrainerAgentNode(Node):
                 return {
                     "needs_profile": True,
                     "response": """
-👩‍⚕️ **Consulta Nutricional Individual**
+🎉 **Bem-vindo ao BodyFlow.ai!**
 
-Olá! Sou seu assistente pessoal de fitness e nutrição e estou aqui para te ajudar com orientações personalizadas sobre treino, alimentação e estilo de vida.
+Que bom te ter aqui! 😊
 
-Para realizar uma consulta completa e eficaz, preciso conhecer melhor você primeiro. Que tal completarmos seu perfil básico?
+Para criar planos perfeitos e personalizados para você, vou coletar algumas informações importantes sobre seus objetivos, características físicas e preferências.
+
+Isso me permitirá oferecer:
+• Treinos sob medida para seu nível
+• Dietas ajustadas aos seus objetivos  
+• Receitas que combinam com seu estilo de vida
+• Acompanhamento personalizado da sua evolução
+
+Vamos começar:
+
+**Qual sua idade?**
 """
                 }
             
@@ -117,6 +126,7 @@ Para realizar uma consulta completa e eficaz, preciso conhecer melhor você prim
             
         except Exception:
             return {"needs_profile": True, "response": "Erro ao verificar perfil."}
+    
     
     async def _conduct_nutritional_consultation(self, user_id: str, content: str, context: Dict[str, Any], image_data: Optional[bytes] = None, is_continuation: bool = False) -> str:
         """Conduz consulta nutricional individual"""
@@ -129,43 +139,70 @@ Para realizar uma consulta completa e eficaz, preciso conhecer melhor você prim
             # Constrói prompt para Claude
             prompt = self._build_consultation_prompt(content, profile, short_term, image_data, is_continuation, context)
             
-            # Chama Claude para gerar consulta
-            response = self.anthropic_client.messages.create(
-                model="claude-3-5-sonnet-20241022",
+            # Usa o serviço centralizado LiteLLM
+            fallback_response = llm_service.get_contextual_fallback(content, profile.get("name", "Paciente"), profile)
+            
+            # Constrói contexto da conversa para manter continuidade
+            conversation_context = self._build_conversation_context(short_term, profile)
+            
+            response = await llm_service.call_with_fallback(
+                messages=[{"role": "user", "content": prompt}],
                 max_tokens=2000,
                 temperature=0.4,
-                messages=[{"role": "user", "content": prompt}]
+                fallback_response=fallback_response,
+                conversation_context=conversation_context
             )
             
-            consultation_text = response.content[0].text
-            
-            return consultation_text
+            return response
             
         except Exception as e:
-            return f"""
-👩‍⚕️ **Consulta Nutricional**
+            print(f"❌ Erro na consulta: {e}")
+            import traceback
+            traceback.print_exc()
+            
+            # Fallback de emergência
+            profile = context.get("long_term", {}).get("profile", {})
+            return llm_service.get_contextual_fallback(content, profile.get("name", "Paciente"), profile)
+    
+    def _build_conversation_context(self, short_term: List[Dict], profile: Dict[str, Any]) -> str:
+        """Constrói contexto da conversa para manter continuidade entre LLMs"""
+        try:
+            user_name = profile.get("name", "Paciente")
+            
+            # Constrói resumo da conversa recente
+            conversation_summary = []
+            if short_term:
+                for msg in short_term[-5:]:  # Últimas 5 mensagens
+                    role = msg.get('role', 'user')
+                    content = msg.get('content', '')
+                    if role == 'user':
+                        conversation_summary.append(f"Paciente: {content}")
+                    elif role == 'assistant':
+                        conversation_summary.append(f"Nutricionista: {content}")
+            
+            context = f"""
+CONVERSA EM ANDAMENTO COM {user_name.upper()}:
 
-Baseado no seu perfil, aqui estão minhas orientações:
+Histórico recente da conversa:
+{chr(10).join(conversation_summary) if conversation_summary else "Primeira interação"}
 
-**Dados do Paciente:**
-- Idade: {profile.get('age', 'N/A')} anos
-- Peso: {profile.get('weight', 'N/A')} kg
-- Altura: {profile.get('height', 'N/A')} cm
-- Objetivo: {profile.get('goal', 'N/A')}
-
-**Orientações Gerais:**
-- Mantenha hidratação adequada (2-3L/dia)
-- Consuma proteínas em todas as refeições
-- Inclua fibras e micronutrientes
-- Evite alimentos ultraprocessados
-
-*Erro ao processar consulta detalhada. Tente novamente.*
+INSTRUÇÕES:
+- Esta é uma conversa contínua com {user_name}
+- Mantenha o tom e estilo da conversa anterior
+- Continue de onde parou, não reinicie a conversa
+- Seja natural e mantenha a continuidade
 """
+            return context.strip()
+            
+        except Exception as e:
+            print(f"❌ Erro ao construir contexto da conversa: {e}")
+            return f"Conversa em andamento com {profile.get('name', 'Paciente')}"
     
     def _build_consultation_prompt(self, content: str, profile: Dict[str, Any], short_term: List[Dict], image_data: Optional[bytes] = None, is_continuation: bool = False, context: Dict[str, Any] = None) -> str:
         """Constrói prompt para consulta nutricional"""
         
         # Dados do perfil
+        user_name = profile.get("name", "Paciente")
         age = profile.get("age", "N/A")
         weight = profile.get("weight", "N/A")
         height = profile.get("height", "N/A")
@@ -202,13 +239,21 @@ ESTILO DE RESPOSTA: {expected_style}
 DADOS DA ANÁLISE DA IMAGEM:
 {self._format_image_analysis_data(image_context_data)}
 
-INSTRUÇÕES ESPECÍFICAS:
+INSTRUÇÕES ESPECÍFICAS PARA ANÁLISE DETALHADA:
 - Analise a imagem considerando o tipo "{image_class}"
 - Foque nas áreas: {focus_text}
+- Se a análise mostra "NÃO CONSEGUIU IDENTIFICAR", explique ao usuário que não foi possível analisar a imagem
+- Se conseguiu identificar alimentos, use TODOS os dados extraídos da imagem (alimentos, calorias, range, macronutrientes, reasoning)
+- Explique o significado do range de calorias e por que é conservador
+- Seja específico sobre cada alimento identificado e suas contribuições nutricionais
+- Considere o objetivo e nível de treino do usuário para sugestões personalizadas
+- Mencione a confiança da análise e como isso afeta as recomendações
+- Inclua sugestões práticas de melhoria baseadas no reasoning fornecido
+- Seja transparente sobre limitações da análise quando a confiança for baixa
+- Mantenha um tom profissional mas acolhedor, usando o nome do usuário
 - Integre a análise com o contexto da consulta
 - Seja prático e aplicável ao dia a dia
-- Use frases curtas e diretas
-- Use os dados da análise fornecidos acima para dar uma resposta específica
+- Use os dados da análise fornecidos acima para dar uma resposta específica e detalhada
 """
         
         prompt = f"""
@@ -218,6 +263,7 @@ Você deve interagir de forma progressiva: pergunte aos poucos, comente o que o 
 Não use respostas longas demais; prefira frases curtas, listas rápidas e exemplos aplicáveis ao dia a dia.
 
 DADOS DO PACIENTE:
+- Nome: {user_name}
 - Idade: {age} anos
 - Peso: {weight} kg
 - Altura: {height} cm
@@ -235,6 +281,7 @@ SOLICITAÇÃO DO PACIENTE: "{content}"
 
 POSTURA NA CONVERSA:
 - {'Responda de forma curta e direta' if is_continuation else 'Seja empático, positivo e motivador desde o início'}
+- Use o nome do paciente ({user_name}) para personalizar a conversa quando apropriado
 - Não transforme a interação em um questionário. Conduza como um bate-papo natural.
 - Faça perguntas curtas e contextuais, de acordo com o que o paciente falar.
 - Se o paciente pedir algo específico, responda na hora, sem esperar todas as informações.
@@ -290,20 +337,122 @@ Forneça uma resposta curta, prática e personalizada baseada nas informações 
                     analysis = food_analysis.get('analysis', {})
                     food_items = analysis.get('food_items', [])
                     calories = analysis.get('estimated_calories', 0)
+                    calorie_range = analysis.get('calorie_range', {})
                     macros = analysis.get('macronutrients', {})
+                    confidence = analysis.get('confidence', 0)
+                    reasoning = analysis.get('reasoning', 'Não fornecido')
+                    
+                    # Verifica se não conseguiu identificar alimentos
+                    if food_items == ['unknown'] or (len(food_items) == 1 and food_items[0] == 'unknown'):
+                        return """
+ANÁLISE NUTRICIONAL - NÃO CONSEGUIU IDENTIFICAR:
+
+❌ RESULTADO DA ANÁLISE:
+- Não foi possível identificar alimentos na imagem
+- A imagem pode estar com baixa qualidade, muito escura ou com alimentos não reconhecíveis
+- Análise nutricional não disponível
+
+🔍 POSSÍVEIS CAUSAS:
+- Imagem muito escura ou desfocada
+- Alimentos não identificáveis pelo sistema
+- Imagem não contém comida visível
+- Qualidade da foto muito baixa
+
+💡 SUGESTÕES:
+- Tente tirar uma nova foto com melhor iluminação
+- Certifique-se de que a comida está bem visível
+- Evite sombras ou reflexos na imagem
+- Mantenha a câmera estável e focada
+"""
+                    
+                    # Formata lista de alimentos com detalhes
+                    food_details = []
+                    for item in food_items:
+                        if isinstance(item, dict):
+                            name = item.get('name', 'Alimento desconhecido')
+                            quantity = item.get('quantity_grams', 'N/A')
+                            item_calories = item.get('calories', 0)
+                            food_details.append(f"• {name} ({quantity}g, {item_calories} kcal)")
+                        else:
+                            food_details.append(f"• {item}")
+                    
+                    food_list = '\n'.join(food_details) if food_details else 'Não identificados'
+                    
+                    # Formata range de calorias
+                    calorie_range_text = ""
+                    if calorie_range:
+                        min_cal = calorie_range.get('min', calories)
+                        max_cal = calorie_range.get('max', calories)
+                        calorie_range_text = f"\n- Range de calorias: {min_cal}-{max_cal} kcal (estimativa conservadora)"
                     
                     return f"""
-- Alimentos identificados: {', '.join(food_items) if food_items else 'Não identificados'}
-- Calorias estimadas: {calories} kcal
-- Macronutrientes: {macros.get('protein', 0)}g proteína, {macros.get('carbs', 0)}g carboidratos, {macros.get('fat', 0)}g gordura
-- Confiança da análise: {food_analysis.get('confidence', 0):.1%}
+ANÁLISE NUTRICIONAL DETALHADA:
+
+🍽️ ALIMENTOS IDENTIFICADOS:
+{food_list}
+
+🔥 CALORIAS:
+- Estimativa principal: {calories} kcal{calorie_range_text}
+
+🥩 MACRONUTRIENTES:
+- Proteína: {macros.get('protein', 0)}g
+- Carboidratos: {macros.get('carbs', 0)}g  
+- Gordura: {macros.get('fat', 0)}g
+
+📊 CONFIABILIDADE:
+- Confiança da análise: {confidence:.1%}
+- Método: {analysis.get('analysis_method', 'llm_analysis')}
+
+🧠 EXPLICAÇÃO DA ANÁLISE:
+{reasoning}
 """
             
             # Dados de bioimpedância
             elif 'bioimpedance_data' in image_context_data:
                 bio_data = image_context_data['bioimpedance_data']
-                return f"""
-- Dados de bioimpedância: {bio_data}
+                
+                if bio_data.get('success') and bio_data.get('data'):
+                    data = bio_data['data']
+                    
+                    # Formata dados de bioimpedância
+                    weight = data.get('weight_kg', 'N/A')
+                    body_fat = data.get('body_fat_percent', 'N/A')
+                    muscle_mass = data.get('muscle_mass_kg', 'N/A')
+                    visceral_fat = data.get('visceral_fat_level', 'N/A')
+                    bmr = data.get('basal_metabolic_rate', 'N/A')
+                    hydration = data.get('hydration_percent', 'N/A')
+                    bone_mass = data.get('bone_mass_kg', 'N/A')
+                    date = data.get('date', 'N/A')
+                    confidence = data.get('confidence', 0)
+                    reasoning = data.get('reasoning', 'Não fornecido')
+                    
+                    return f"""
+ANÁLISE DE COMPOSIÇÃO CORPORAL DETALHADA:
+
+📊 DADOS PRINCIPAIS:
+- Peso: {weight} kg
+- Gordura corporal: {body_fat}%
+- Massa muscular: {muscle_mass} kg
+- Gordura visceral: {visceral_fat} (nível 1-59)
+
+⚡ METABOLISMO:
+- Taxa metabólica basal: {bmr} kcal
+- Hidratação: {hydration}%
+- Massa óssea: {bone_mass} kg
+
+📅 INFORMAÇÕES:
+- Data do exame: {date}
+- Confiança da análise: {confidence:.1%}
+
+🧠 EXPLICAÇÃO DA ANÁLISE:
+{reasoning}
+"""
+                else:
+                    return f"""
+❌ ERRO NA ANÁLISE DE BIOIMPEDÂNCIA:
+- Não foi possível extrair dados da imagem
+- Erro: {bio_data.get('error', 'Desconhecido')}
+- Verifique se a imagem está clara e legível
 """
             
             # Dados genéricos
@@ -416,11 +565,8 @@ Como posso te ajudar agora?
     async def _detect_exit_intent(self, content: str) -> bool:
         """Detecta se usuário quer sair da consulta usando LLM"""
         try:
-            # Usa LLM para análise mais inteligente e flexível
-            response = self.anthropic_client.messages.create(
-                model="claude-3-haiku-20240307",  # Modelo mais rápido para análise simples
-                max_tokens=50,
-                temperature=0.1,
+            # Usa LiteLLM para análise mais inteligente e flexível
+            response = await llm_service.call_with_fallback(
                 messages=[{
                     "role": "user", 
                     "content": f"""
@@ -435,10 +581,12 @@ Responda APENAS:
 Exemplos de SAIR: despedidas, agradecimentos finais, "tchau", "obrigado", "até logo", "finalizar", "terminar consulta"
 Exemplos de CONTINUAR: perguntas sobre nutrição, pedidos de ajuda, dúvidas, "quero saber", "como fazer"
 """
-                }]
+                }],
+                max_tokens=50,
+                temperature=0.1
             )
             
-            result = response.content[0].text.strip().upper()
+            result = response.strip().upper()
             return result == "SAIR"
             
         except Exception:
