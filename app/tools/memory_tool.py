@@ -161,7 +161,7 @@ class MemoryTool(Tool):
                 return True
             
             last_interaction = datetime.fromisoformat(session.get("last_interaction_at", ""))
-            timeout_threshold = datetime.now() - timedelta(minutes=Config.SESSION_TIMEOUT_MINUTES)
+            timeout_threshold = datetime.now() - timedelta(minutes=ADKConfig.SESSION_TIMEOUT_MINUTES)
             
             return last_interaction < timeout_threshold
         except Exception as e:

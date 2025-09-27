@@ -107,7 +107,7 @@ class SuperPersonalTrainerAgentNode(Node):
                     "response": """
 👩‍⚕️ **Consulta Nutricional Individual**
 
-Olá! Sou sua nutricionista e estou aqui para te ajudar com orientações personalizadas sobre alimentação e estilo de vida.
+Olá! Sou seu assistente pessoal de fitness e nutrição e estou aqui para te ajudar com orientações personalizadas sobre treino, alimentação e estilo de vida.
 
 Para realizar uma consulta completa e eficaz, preciso conhecer melhor você primeiro. Que tal completarmos seu perfil básico?
 """
@@ -398,7 +398,7 @@ Forneça uma resposta curta, prática e personalizada baseada nas informações 
 
 Obrigado pela consulta! Foi um prazer te ajudar com suas questões de saúde, nutrição e treino.
 
-Se precisar de mais orientações no futuro, estarei aqui para te ajudar! 
+Se precisar de mais orientações no futuro, estarei aqui como seu Super Personal Trainer! 
 
 Como posso te ajudar agora?
 """

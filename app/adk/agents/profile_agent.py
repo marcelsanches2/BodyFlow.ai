@@ -27,7 +27,6 @@ class ProfileAgentNode(Node):
         # Estados do onboarding
         self.onboarding_steps = [
             "welcome",
-            "name",
             "age",
             "height", 
             "weight",
@@ -39,12 +38,6 @@ class ProfileAgentNode(Node):
         
         # Campos do perfil com validações
         self.profile_fields = {
-            "name": {
-                "type": "text",
-                "required": True,
-                "validation": lambda x: len(x.strip()) >= 2,
-                "error_msg": "Nome deve ter pelo menos 2 caracteres"
-            },
             "age": {
                 "type": "integer",
                 "required": True,
@@ -85,46 +78,6 @@ class ProfileAgentNode(Node):
             }
         }
     
-    async def _get_user_profile_from_table(self, user_id: str) -> Dict[str, Any]:
-        """Busca perfil do usuário na tabela user_profile"""
-        try:
-            from app.services.memory import MemoryManager
-            memory_manager = MemoryManager()
-            result = memory_manager.supabase.table("user_profile").select("*").eq("user_id", user_id).execute()
-            if result.data:
-                return result.data[0]
-            return {}
-        except Exception as e:
-            print(f"❌ Erro ao buscar perfil na tabela user_profile: {e}")
-            return {}
-    
-    async def _update_user_profile_in_table(self, user_id: str, profile_data: Dict[str, Any]) -> bool:
-        """Atualiza perfil do usuário na tabela user_profile"""
-        try:
-            from app.services.memory import MemoryManager
-            memory_manager = MemoryManager()
-            
-            # Verifica se já existe registro
-            existing = await self._get_user_profile_from_table(user_id)
-            
-            if existing:
-                # Atualiza registro existente
-                result = memory_manager.supabase.table("user_profile").update({
-                    **profile_data,
-                    "updated_at": "NOW()"
-                }).eq("user_id", user_id).execute()
-            else:
-                # Cria novo registro
-                result = memory_manager.supabase.table("user_profile").insert({
-                    "user_id": user_id,
-                    **profile_data
-                }).execute()
-            
-            return len(result.data) > 0
-        except Exception as e:
-            print(f"❌ Erro ao atualizar perfil na tabela user_profile: {e}")
-            return False
-    
     async def process(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Processa mensagem no contexto do gerenciamento de perfil
@@ -138,9 +91,6 @@ class ProfileAgentNode(Node):
             force_welcome = input_data.get("force_welcome", False)
             update_intent = input_data.get("update_intent", None)
             
-            # Busca perfil na tabela user_profile (fonte única da verdade)
-            profile_data = await self._get_user_profile_from_table(user_id)
-            
             # Verifica se onboarding está completo na tabela customers
             from app.services.memory import MemoryManager
             memory_manager = MemoryManager()
@@ -149,11 +99,11 @@ class ProfileAgentNode(Node):
             
             # SEPARAÇÃO COMPLETA: Onboarding vs Atualização
             if onboarding_completed:
-                # FLUXO DE ATUALIZAÇÃO DE PERFIL
-                return await self._handle_profile_update_flow(user_id, content, profile_data, update_intent)
+                # FLUXO DE ATUALIZAÇÃO DE PERFIL - APENAS para usuários com onboarding completo
+                return await self._handle_profile_update_flow(user_id, content, update_intent)
             else:
-                # FLUXO DE ONBOARDING
-                return await self._handle_onboarding_flow(user_id, content, context, profile_data, force_welcome)
+                # FLUXO DE ONBOARDING - APENAS para usuários sem onboarding completo
+                return await self._handle_onboarding_flow(user_id, content, context, force_welcome)
             
         except Exception as e:
             execution_time = (time.time() - start_time) * 1000
@@ -167,17 +117,17 @@ class ProfileAgentNode(Node):
                 }
             }
     
-    async def _handle_onboarding_flow(self, user_id: str, content: str, context: Dict[str, Any], profile_data: Dict[str, Any], force_welcome: bool) -> Dict[str, Any]:
+    async def _handle_onboarding_flow(self, user_id: str, content: str, context: Dict[str, Any], force_welcome: bool) -> Dict[str, Any]:
         """
         FLUXO DE ONBOARDING - Apenas para usuários que não completaram o onboarding
         """
         try:
             # Se for welcome forçado, mostra mensagem de boas-vindas
             if force_welcome:
-                return await self._handle_welcome_step(user_id, content, profile_data)
+                return await self._handle_welcome_step(user_id, content)
             
-            # Processa onboarding passo a passo (mesmo que o perfil tenha dados)
-            result = await self._process_onboarding_flow(user_id, content, profile_data)
+            # Processa onboarding passo a passo
+            result = await self._process_onboarding_flow(user_id, content)
             
             # Se onboarding foi completado, sugere próximo agente
             if result.get("onboarding_completed"):
@@ -205,11 +155,14 @@ class ProfileAgentNode(Node):
                 }
             }
     
-    async def _handle_profile_update_flow(self, user_id: str, content: str, profile_data: Dict[str, Any], update_intent: str) -> Dict[str, Any]:
+    async def _handle_profile_update_flow(self, user_id: str, content: str, update_intent: str) -> Dict[str, Any]:
         """
         FLUXO DE ATUALIZAÇÃO DE PERFIL - Apenas para usuários que completaram o onboarding
         """
         try:
+            # Busca perfil atual do usuário na tabela user_profile
+            profile_data = await self._get_user_profile_from_table(user_id)
+            
             # Se é uma solicitação de atualização específica
             if update_intent:
                 return await self._handle_specific_update(user_id, content, update_intent, profile_data)
@@ -1083,65 +1036,46 @@ Resposta (apenas o nível ou "null"):
             return None
     
     async def _extract_restrictions(self, content: str) -> Optional[str]:
-        """Extrai restrições alimentares da mensagem usando LLM de forma inteligente"""
+        """Extrai restrições da mensagem usando LLM"""
         try:
             prompt = f"""
-Você é um especialista em interpretar restrições alimentares e de saúde de forma inteligente e contextual.
+Você é um assistente inteligente especializado em interpretar restrições alimentares e de saúde de forma contextual e natural.
 
-MENSAGEM DO USUÁRIO: "{content}"
+MENSAGEM: "{content}"
 
-TAREFA: Identifique se o usuário está mencionando restrições alimentares, alergias, intolerâncias ou condições de saúde que afetam a alimentação.
+ANÁLISE INTELIGENTE:
+Identifique se o usuário está fornecendo informações sobre restrições alimentares ou de saúde. Seja contextualmente inteligente:
 
-INTERPRETAÇÃO INTELIGENTE:
-- Seja flexível com linguagem natural e coloquial
-- Entenda sinônimos e variações de expressão
-- Considere contexto e intenção
-- Reconheça diferentes formas de expressar a mesma restrição
+• Analise o contexto completo da mensagem
+• Entenda variações naturais de linguagem e sinônimos
+• Considere o tom e intenção da mensagem
+• Se não há restrições claras ou é ambíguo, retorne "null"
 
-EXEMPLOS DE INTERPRETAÇÃO:
-- "não posso comer lactose" → "intolerância à lactose"
-- "sou diabético" → "diabetes"
-- "tenho alergia a amendoim" → "alergia a amendoim"
-- "não como carne" → "vegetariano"
-- "sou vegano" → "vegano"
-- "tenho pressão alta" → "hipertensão"
-- "não posso comer glúten" → "intolerância ao glúten"
-- "tenho gastrite" → "gastrite"
-- "não como fritura" → "evita frituras"
-- "tenho colesterol alto" → "colesterol alto"
+INTERPRETAÇÃO CONTEXTUAL:
+Seja inteligente na interpretação. Entenda a intenção real por trás das palavras, considerando:
+- Contexto da conversa
+- Padrões naturais de linguagem
+- Sinônimos e variações de expressão
+- Intenção comunicativa do usuário
 
-FORMATO DE RESPOSTA:
-- Se há restrições claras: descreva de forma clara e médica
-- Se não há restrições: "nenhuma"
-- Se é ambíguo ou não relacionado: "nenhuma"
-
-Resposta (apenas a restrição identificada ou "nenhuma"):
+Resposta (apenas a restrição, "nenhuma" ou "null"):
 """
             
             response = self.anthropic_client.messages.create(
                 model="claude-3-5-sonnet-20241022",
-                max_tokens=50,
+                max_tokens=30,
                 temperature=0.1,
                 messages=[{"role": "user", "content": prompt}]
             )
             
             result = response.content[0].text.strip().lower()
             
-            # Processa a resposta de forma inteligente
-            if result in ["nenhuma", "none", "não", "nao", "nada", "null", ""]:
+            if result == "null":
+                return None
+            elif result == "nenhuma":
                 return "nenhuma"
             else:
-                # Normaliza a resposta para evitar textos muito longos
-                # Pega apenas a primeira parte antes de parênteses ou explicações
-                normalized = result.split('(')[0].split('[')[0].strip()
-                # Remove explicações extras e mantém apenas a restrição principal
-                if len(normalized) > 50:
-                    # Se muito longo, pega apenas as primeiras palavras
-                    words = normalized.split()
-                    if len(words) > 4:
-                        normalized = ' '.join(words[:4])
-                
-                return normalized
+                return result
                 
         except Exception:
             return None
@@ -1169,12 +1103,45 @@ Agora posso te ajudar com:
 💪 **Escolha uma opção ou me diga direto seu objetivo que eu preparo algo pra você!**
 """
     
-    async def _update_user_profile(self, user_id: str, profile_data: Dict[str, Any]) -> None:
-        """Atualiza perfil do usuário"""
+    async def _get_user_profile_from_table(self, user_id: str) -> Dict[str, Any]:
+        """Busca perfil do usuário na tabela user_profile"""
         try:
-            await self.memory_tool.update_long_term_profile(user_id, profile_data)
-        except Exception:
-            pass
+            from app.services.memory import MemoryManager
+            memory_manager = MemoryManager()
+            result = memory_manager.supabase.table("user_profile").select("*").eq("user_id", user_id).execute()
+            if result.data:
+                return result.data[0]
+            return {}
+        except Exception as e:
+            print(f"❌ Erro ao buscar perfil na tabela user_profile: {e}")
+            return {}
+    
+    async def _update_user_profile(self, user_id: str, profile_data: Dict[str, Any]) -> bool:
+        """Atualiza perfil do usuário na tabela user_profile"""
+        try:
+            from app.services.memory import MemoryManager
+            memory_manager = MemoryManager()
+            
+            # Verifica se já existe registro
+            existing = memory_manager.supabase.table("user_profile").select("*").eq("user_id", user_id).execute()
+            
+            if existing.data:
+                # Atualiza registro existente
+                result = memory_manager.supabase.table("user_profile").update({
+                    **profile_data,
+                    "updated_at": "NOW()"
+                }).eq("user_id", user_id).execute()
+            else:
+                # Cria novo registro
+                result = memory_manager.supabase.table("user_profile").insert({
+                    "user_id": user_id,
+                    **profile_data
+                }).execute()
+            
+            return len(result.data) > 0
+        except Exception as e:
+            print(f"❌ Erro ao atualizar perfil na tabela user_profile: {e}")
+            return False
     
     async def _complete_onboarding(self, user_id: str) -> None:
         """Marca onboarding como completo"""
@@ -1255,24 +1222,52 @@ Agora posso te ajudar com:
         
         return None
     
-    def _extract_goal_value(self, content: str) -> str:
-        """Extrai objetivo de várias formas de entrada"""
-        content = content.lower().strip()
-        
-        # Mapeamento de sinônimos para objetivos
-        goal_mapping = {
-            "emagrecimento": ["emagrecer", "perder peso", "queimar gordura", "definir", "secar", "emagrecimento"],
-            "hipertrofia": ["ganhar massa", "crescer", "hipertrofia", "musculação", "malhar", "treinar"],
-            "condicionamento": ["condicionamento", "fitness", "saúde", "bem estar", "exercitar"],
-            "manutencao": ["manter", "manutenção", "manter peso", "equilibrar"]
-        }
-        
-        for goal, synonyms in goal_mapping.items():
-            for synonym in synonyms:
-                if synonym in content:
-                    return goal
-        
-        return None
+    async def _extract_goal_value(self, content: str) -> str:
+        """Extrai objetivo usando LLM para interpretar diferentes expressões"""
+        try:
+            prompt = f"""
+Analise a seguinte expressão do usuário sobre seu objetivo fitness e classifique em uma das categorias abaixo:
+
+EXPRESSÃO DO USUÁRIO: "{content}"
+
+CATEGORIAS DISPONÍVEIS:
+1. "emagrecimento" - para quem quer perder peso, queimar gordura, ficar mais magro, secar, definir o corpo
+2. "hipertrofia" - para quem quer ganhar massa muscular, ficar maromba, crescer, ficar forte, malhar
+3. "condicionamento" - para quem quer melhorar condicionamento físico, saúde, bem-estar, resistência
+4. "manutencao" - para quem quer manter o peso atual, equilibrar, não mudar muito
+
+EXEMPLOS DE INTERPRETAÇÃO:
+- "ganho de massa" → hipertrofia
+- "ficar maromba" → hipertrofia  
+- "ficar fininha" → emagrecimento
+- "perder barriga" → emagrecimento
+- "melhorar fôlego" → condicionamento
+- "manter peso" → manutencao
+
+Responda APENAS com uma das 4 categorias (emagrecimento, hipertrofia, condicionamento, manutencao) ou "null" se não conseguir classificar.
+"""
+
+            response = self.anthropic_client.messages.create(
+                model="claude-3-haiku-20240307",
+                max_tokens=50,
+                messages=[{
+                    "role": "user",
+                    "content": prompt
+                }]
+            )
+            
+            result = response.content[0].text.strip().lower()
+            
+            # Valida se o resultado é uma categoria válida
+            valid_goals = ["emagrecimento", "hipertrofia", "condicionamento", "manutencao"]
+            if result in valid_goals:
+                return result
+            else:
+                return None
+                
+        except Exception as e:
+            print(f"❌ Erro ao extrair objetivo com LLM: {e}")
+            return None
     
     def _extract_training_level_value(self, content: str) -> str:
         """Extrai nível de treino de várias formas de entrada"""
@@ -1323,7 +1318,7 @@ Agora posso te ajudar com:
             
             # Atualiza o perfil
             updated_profile = {**profile_data, update_intent: field_value}
-            success = await self._update_user_profile_in_table(user_id, updated_profile)
+            success = await self._update_user_profile(user_id, updated_profile)
             
             if success:
                 return {
@@ -1359,7 +1354,6 @@ Agora posso te ajudar com:
 👤 **Atualização de Perfil**
 
 Seu perfil atual:
-• Nome: {profile_data.get('name', 'N/A')}
 • Idade: {profile_data.get('age', 'N/A')} anos
 • Altura: {profile_data.get('height_cm', 'N/A')} cm
 • Peso: {profile_data.get('current_weight_kg', 'N/A')} kg
@@ -1367,7 +1361,6 @@ Seu perfil atual:
 • Nível: {profile_data.get('training_level', 'N/A')}
 
 Para atualizar, digite:
-• "Atualizar nome" ou "Mudar nome"
 • "Atualizar peso" ou "Mudar peso"
 • "Atualizar objetivo" ou "Mudar objetivo"
 • etc.
@@ -1384,14 +1377,17 @@ Ou digite diretamente o novo valor, como "80 kg" para peso.
             }
     
     
-    async def _process_onboarding_flow(self, user_id: str, content: str, profile_data: Dict[str, Any]) -> Dict[str, Any]:
+    async def _process_onboarding_flow(self, user_id: str, content: str) -> Dict[str, Any]:
         """Processa fluxo de onboarding"""
         try:
+            # Busca perfil atual do usuário na tabela user_profile
+            profile_data = await self._get_user_profile_from_table(user_id)
+            
             # Determina próximo passo
             next_step = self._get_next_onboarding_step(profile_data)
             
             if next_step == "welcome":
-                return await self._handle_welcome_step(user_id, content, profile_data)
+                return await self._handle_welcome_step(user_id, content)
             elif next_step == "age":
                 return await self._handle_age_step(user_id, content, profile_data)
             elif next_step == "height":
@@ -1407,7 +1403,7 @@ Ou digite diretamente o novo valor, como "80 kg" para peso.
             elif next_step == "completion":
                 return await self._handle_completion_step(user_id, content, profile_data)
             else:
-                return await self._handle_welcome_step(user_id, content, profile_data)
+                return await self._handle_welcome_step(user_id, content)
                 
         except Exception as e:
             return {
@@ -1417,11 +1413,8 @@ Ou digite diretamente o novo valor, como "80 kg" para peso.
     
     def _get_next_onboarding_step(self, profile_data: Dict[str, Any]) -> str:
         """Determina o próximo passo do onboarding"""
-        # Se o perfil está completamente vazio, mostra welcome primeiro
-        has_any_data = any(v for v in profile_data.values() if v is not None and v != "")
-        if not has_any_data:
-            return "welcome"
-        elif not profile_data.get("age"):
+        # Pula welcome, vai direto para age
+        if not profile_data.get("age"):
             return "age"
         elif not profile_data.get("height_cm"):
             return "height"
@@ -1439,9 +1432,7 @@ Ou digite diretamente o novo valor, como "80 kg" para peso.
     async def _extract_field_value(self, content: str, field_name: str) -> Any:
         """Extrai valor de um campo específico da mensagem do usuário"""
         try:
-            if field_name == "name":
-                return content.strip()
-            elif field_name == "age":
+            if field_name == "age":
                 # Extrai número da mensagem
                 import re
                 numbers = re.findall(r'\d+', content)
@@ -1451,7 +1442,7 @@ Ou digite diretamente o novo valor, como "80 kg" para peso.
             elif field_name == "current_weight_kg":
                 return self._extract_weight_value(content)
             elif field_name == "goal":
-                return self._extract_goal_value(content)
+                return await self._extract_goal_value(content)
             elif field_name == "training_level":
                 return self._extract_training_level_value(content)
             elif field_name == "restrictions":
@@ -1491,8 +1482,6 @@ Ou digite diretamente o novo valor, como "80 kg" para peso.
             
             # Mapeamento de palavras-chave para campos
             field_mappings = {
-                "nome": "name",
-                "name": "name",
                 "idade": "age",
                 "age": "age",
                 "altura": "height_cm",
@@ -1546,18 +1535,8 @@ Ou digite diretamente o novo valor, como "80 kg" para peso.
     # MÉTODOS DE ONBOARDING ESPECÍFICOS
     # =====================================================
     
-    async def _handle_welcome_step(self, user_id: str, content: str, profile_data: Dict[str, Any]) -> Dict[str, Any]:
+    async def _handle_welcome_step(self, user_id: str, content: str) -> Dict[str, Any]:
         """Lida com o passo de boas-vindas"""
-        # Se há conteúdo na mensagem, tenta detectar se é uma idade
-        if content.strip():
-            import re
-            # Verifica se contém números (qualquer número pode ser idade)
-            numbers = re.findall(r'\d+', content.strip())
-            if numbers:
-                # Qualquer número é considerado uma tentativa de idade
-                return await self._handle_age_step(user_id, content, profile_data)
-        
-        # Se não há conteúdo ou não contém números, mostra welcome
         return {
             "response": """
 🎉 **Bem-vindo ao BodyFlow.ai!**
@@ -1588,7 +1567,23 @@ Vamos começar:
             numbers = re.findall(r'\d+', content)
             if not numbers:
                 return {
-                    "response": "Por favor, digite sua idade:",
+                    "response": """
+🎉 **Bem-vindo ao BodyFlow.ai!**
+
+Que bom te ter aqui! 
+
+Para criar planos perfeitos e personalizados para você, vou coletar algumas informações importantes sobre seus objetivos, características físicas e preferências.
+
+Isso me permitirá oferecer:
+• Treinos sob medida para seu nível
+• Dietas ajustadas aos seus objetivos  
+• Receitas que combinam com seu estilo de vida
+• Acompanhamento personalizado da sua evolução
+
+Vamos começar:
+
+**Qual sua idade?**
+""",
                     "current_step": "age",
                     "profile_updated": False
                 }
@@ -1602,9 +1597,7 @@ Vamos começar:
                 }
             
             updated_profile = {**profile_data, "age": age}
-            print(f"💾 ProfileAgent: Salvando idade {age} para customer_id {user_id}")
-            success = await self._update_user_profile_in_table(user_id, updated_profile)
-            print(f"💾 ProfileAgent: Resultado do salvamento: {success}")
+            success = await self._update_user_profile(user_id, updated_profile)
             
             if success:
                 return {
@@ -1647,7 +1640,7 @@ Vamos começar:
                 }
             
             updated_profile = {**profile_data, "height_cm": height_cm}
-            success = await self._update_user_profile_in_table(user_id, updated_profile)
+            success = await self._update_user_profile(user_id, updated_profile)
             
             if success:
                 return {
@@ -1690,7 +1683,7 @@ Vamos começar:
                 }
             
             updated_profile = {**profile_data, "current_weight_kg": weight_kg}
-            success = await self._update_user_profile_in_table(user_id, updated_profile)
+            success = await self._update_user_profile(user_id, updated_profile)
             
             if success:
                 return {
@@ -1715,7 +1708,7 @@ Vamos começar:
     
     async def _handle_goal_step(self, user_id: str, content: str, profile_data: Dict[str, Any]) -> Dict[str, Any]:
         """Lida com coleta do objetivo"""
-        goal = self._extract_goal_value(content)
+        goal = await self._extract_goal_value(content)
         
         if not goal or goal not in ["emagrecimento", "hipertrofia", "condicionamento", "manutencao"]:
             return {
@@ -1725,7 +1718,7 @@ Vamos começar:
             }
         
         updated_profile = {**profile_data, "goal": goal}
-        success = await self._update_user_profile_in_table(user_id, updated_profile)
+        success = await self._update_user_profile(user_id, updated_profile)
         
         if success:
             return {
@@ -1753,11 +1746,11 @@ Vamos começar:
             }
         
         updated_profile = {**profile_data, "training_level": training_level}
-        success = await self._update_user_profile_in_table(user_id, updated_profile)
+        success = await self._update_user_profile(user_id, updated_profile)
         
         if success:
             return {
-                "response": f"✅ Nível salvo: **{training_level}**\n\n**Tem alguma restrição alimentar ou de saúde?**\n\nSe não tiver, digite 'nenhuma' ou 'não'.",
+                "response": f"✅ Nível salvo: **{training_level}**\n\n**Tem alguma restrição alimentar ou de saúde?**",
                 "current_step": "restrictions",
                 "profile_updated": True,
                 "profile_data": updated_profile
@@ -1777,7 +1770,7 @@ Vamos começar:
             restrictions = {}
         
         updated_profile = {**profile_data, "restrictions": restrictions}
-        success = await self._update_user_profile_in_table(user_id, updated_profile)
+        success = await self._update_user_profile(user_id, updated_profile)
         
         if success:
             # Marca onboarding como completo no banco de dados

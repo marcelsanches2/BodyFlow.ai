@@ -138,12 +138,14 @@ ONBOARDING COMPLETO: {onboarding_completed}
 
 INTENÇÕES POSSÍVEIS:
 - "registration" - Usuário não existe, precisa se cadastrar
-- "onboarding" - Usuário existe mas precisa completar perfil
+- "onboarding" - Usuário existe mas precisa completar perfil (inclui comandos como /start, "olá", "oi")
 - "profile_update" - Usuário quer atualizar dados
 - "super_personal_trainer" - Usuário quer consulta de saúde/nutrição/treino
 - "saudacao" - Cumprimento
 - "suporte" - Dúvidas/problemas
 - "unknown" - Não conseguiu entender
+
+IMPORTANTE: Comandos como "/start", "/iniciar", "olá", "oi" devem ser classificados como "onboarding" se o usuário existe mas não completou o onboarding, ou "saudacao" se já completou.
 
 RESPONDA EM JSON:
 {{
@@ -269,7 +271,7 @@ Depois disso, poderei criar planos de treino e dieta totalmente personalizados p
                     "agent_name": "suporte",
                     "response": """🤝 **Como posso te ajudar?**
 
-Posso te auxiliar com:
+Sou seu Super Personal Trainer e posso te auxiliar com:
 
 🏃‍♂️ **Treino sob medida** → Sugestões de exercícios, divisão de treinos e como melhorar performance
 🥗 **Alimentação ajustada** → Cardápios, ideias de refeições e ajustes na dieta para seus objetivos  

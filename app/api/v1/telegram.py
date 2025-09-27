@@ -342,6 +342,10 @@ Depois disso, poderei criar planos de treino e dieta totalmente personalizados p
 
 🔗 **Cadastre-se em:** bodyflow.ai""")
                 return {"status": "ok"}
+            else:
+                # Usuário validado com sucesso - processa mensagem normalmente
+                logger.info(f"✅ Usuário {validation_result['user']['name']} validado com sucesso")
+                phone_number = validation_result["normalized_phone"]
         else:
             # Se não é contato, verifica se já foi validado antes
             # Primeiro, verifica se o chat_id já tem validação no banco
