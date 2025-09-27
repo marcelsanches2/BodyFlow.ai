@@ -1,29 +1,49 @@
 import os
 from dotenv import load_dotenv
+from pathlib import Path
 
-# Carrega variáveis do arquivo .env
-load_dotenv()
+# Carrega variáveis de ambiente de múltiplos arquivos possíveis
+def load_environment_variables():
+    """Carrega variáveis de ambiente de múltiplos arquivos possíveis"""
+    possible_files = [
+        ".env.secrets",      # Arquivo principal de segredos
+        ".env.local",        # Arquivo local
+        ".env",              # Arquivo padrão
+        ".env_example"       # Arquivo de exemplo (fallback)
+    ]
+    
+    for file_name in possible_files:
+        file_path = Path(file_name)
+        if file_path.exists():
+            print(f"🔐 Carregando variáveis de: {file_name}")
+            load_dotenv(file_path)
+            return True
+    
+    print("⚠️ Nenhum arquivo de ambiente encontrado")
+    return False
+
+# Carrega variáveis de ambiente
+load_environment_variables()
 
 class Config:
     # Supabase Configuration
-    SUPABASE_URL = os.getenv("SUPABASE_URL", "https://skeajcrmywosbhfnornk.supabase.co")
-    SUPABASE_KEY = os.getenv("SUPABASE_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNrZWFqY3JteXdvc2JoZm5vcm5rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg1ODQzNTYsImV4cCI6MjA3NDE2MDM1Nn0.JZCwaCFOMf2ytRmjEfNnivyDM98ELOjhx6R32vghj1o")
-
+    SUPABASE_URL = os.getenv("SUPABASE_URL", "")
+    SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
     
     # Twilio Configuration
-    TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN", "532cb2cc270fdc7f85e899e892cd21bb")
+    TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN", "")
     
     # Telegram Configuration
-    TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "8397034210:AAGpJOcyje4wL0bScsRCQJBvS6zu3LgtSaE")
-    TELEGRAM_WEBHOOK_URL = os.getenv("TELEGRAM_WEBHOOK_URL", "https://bannered-anh-laughably.ngrok-free.dev/telegram/")
+    TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+    TELEGRAM_WEBHOOK_URL = os.getenv("TELEGRAM_WEBHOOK_URL", "")
     
     # Anthropic Configuration
     ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
-    ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-3-5-sonnet-20241022")
+    ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "")
     
     # Channel Configuration
-    ACTIVE_CHANNEL = os.getenv("ACTIVE_CHANNEL", "telegram")  # "whatsapp" ou "telegram"
+    ACTIVE_CHANNEL = os.getenv("ACTIVE_CHANNEL", "")  # "whatsapp" ou "telegram"
     
     # Application Configuration
-    DEBUG = os.getenv("DEBUG", "True").lower() == "true"
-    PORT = int(os.getenv("PORT", "8000"))
+    DEBUG = os.getenv("DEBUG", "")
+    PORT = int(os.getenv("PORT", ""))
