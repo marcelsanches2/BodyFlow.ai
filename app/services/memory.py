@@ -284,19 +284,44 @@ class MemoryManager:
             return False
     
     async def update_user_profile(self, user_id: str, profile_data: Dict[str, Any]) -> bool:
-        """Atualiza perfil do usuário"""
+        """Atualiza perfil do usuário na tabela user_profile"""
         try:
-            # Converte profile_data para JSON string
-            profile_json = json.dumps(profile_data)
-            
+            # Prepara dados para inserção/atualização na tabela user_profile
             data = {
-                "profile": profile_json,
-                "last_profile_update": datetime.now().isoformat()
+                "user_id": user_id,
+                "name": profile_data.get("name"),
+                "age": profile_data.get("age"),
+                "height_cm": profile_data.get("height_cm"),
+                "current_weight_kg": profile_data.get("current_weight_kg"),
+                "current_body_fat_percent": profile_data.get("current_body_fat_percent"),
+                "current_muscle_mass_kg": profile_data.get("current_muscle_mass_kg"),
+                "goal": profile_data.get("goal"),
+                "restrictions": profile_data.get("restrictions"),
+                "training_level": profile_data.get("training_level"),
+                "updated_at": datetime.now().isoformat()
             }
             
-            # user_id é o customer_id (UUID), não o telefone
-            result = self.supabase.table("customers").update(data).eq("id", user_id).execute()
-            print(f"💾 MemoryManager: Atualizando perfil para customer_id {user_id}: {len(result.data)} registro(s) atualizado(s)")
+            # Remove campos None para evitar problemas
+            data = {k: v for k, v in data.items() if v is not None}
+            
+            # Verifica se já existe um perfil para este usuário
+            existing = self.supabase.table("user_profile").select("id").eq("user_id", user_id).execute()
+            
+            if existing.data:
+                # Atualiza perfil existente
+                result = self.supabase.table("user_profile").update(data).eq("user_id", user_id).execute()
+                print(f"💾 MemoryManager: Atualizando perfil existente para user_id {user_id}: {len(result.data)} registro(s) atualizado(s)")
+            else:
+                # Cria novo perfil
+                data["created_at"] = datetime.now().isoformat()
+                result = self.supabase.table("user_profile").insert(data).execute()
+                print(f"💾 MemoryManager: Criando novo perfil para user_id {user_id}: {len(result.data)} registro(s) criado(s)")
+            
+            # Atualiza timestamp na tabela customers
+            self.supabase.table("customers").update({
+                "last_profile_update": datetime.now().isoformat()
+            }).eq("id", user_id).execute()
+            
             return len(result.data) > 0
         except Exception as e:
             print(f"❌ Erro ao atualizar perfil: {e}")

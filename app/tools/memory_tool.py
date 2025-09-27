@@ -74,19 +74,14 @@ class MemoryTool(Tool):
             # user_id já é o customer_id (UUID), busca usuário diretamente
             user = await memory_manager.get_user_by_id(user_id)
             if user:
-                profile = {}
-                if user.get("profile"):
-                    import json
-                    try:
-                        profile = json.loads(user["profile"])
-                    except:
-                        profile = {}
+                # Busca dados de perfil da tabela user_profile
+                profile_data = await self._get_user_profile_data(user_id)
                 
                 return {
                     "user_id": user.get("id"),
                     "phone": user.get("whatsapp"),  # Campo correto na tabela customers
                     "is_active": user.get("is_active", False),
-                    "profile": profile,
+                    "profile": profile_data,
                     "onboarding_completed": user.get("onboarding_completed", False),
                     "last_profile_update": user.get("last_profile_update", "")
                 }
@@ -95,17 +90,43 @@ class MemoryTool(Tool):
             print(f"❌ MemoryTool: Erro ao buscar perfil: {e}")
             return {}
     
-    async def get_long_term_profile(self, user_id: str) -> Dict[str, Any]:
-        """
-        Recupera apenas o perfil do usuário (longo prazo)
-        """
+    async def _get_user_profile_data(self, user_id: str) -> Dict[str, Any]:
+        """Busca dados de perfil da tabela user_profile"""
         try:
-            user = await memory_manager.get_user_by_phone(user_id)
-            if user and user.get("profile"):
-                import json
-                return json.loads(user["profile"])
+            from app.core.config import Config
+            from supabase import create_client
+            
+            supabase = create_client(Config.SUPABASE_URL, Config.SUPABASE_KEY)
+            result = supabase.table('user_profile').select('*').eq('user_id', user_id).execute()
+            
+            if result.data:
+                profile = result.data[0]
+                return {
+                    "name": profile.get("name"),
+                    "age": profile.get("age"),
+                    "height_cm": profile.get("height_cm"),
+                    "current_weight_kg": profile.get("current_weight_kg"),
+                    "current_body_fat_percent": profile.get("current_body_fat_percent"),
+                    "current_muscle_mass_kg": profile.get("current_muscle_mass_kg"),
+                    "goal": profile.get("goal"),
+                    "restrictions": profile.get("restrictions"),
+                    "training_level": profile.get("training_level"),
+                    "updated_at": profile.get("updated_at"),
+                    "created_at": profile.get("created_at")
+                }
             return {}
         except Exception as e:
+            print(f"❌ MemoryTool: Erro ao buscar dados de perfil: {e}")
+            return {}
+    
+    async def get_long_term_profile(self, user_id: str) -> Dict[str, Any]:
+        """
+        Recupera apenas o perfil do usuário (longo prazo) da tabela user_profile
+        """
+        try:
+            return await self._get_user_profile_data(user_id)
+        except Exception as e:
+            print(f"❌ MemoryTool: Erro ao buscar perfil: {e}")
             return {}
     
     async def save_message(self, user_id: str, content: str, direction: str) -> bool:
