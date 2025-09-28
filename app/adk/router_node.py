@@ -41,6 +41,21 @@ class RouterNode(Node):
             if session_expired:
                 await self._handle_session_timeout(user_id)
             
+            # Verifica se o usuário está ativo/inativo (centralizado para ambos os canais)
+            user_status_check = await self._check_user_status(user_id)
+            if user_status_check.get("inactive"):
+                return {
+                    "success": True,
+                    "response": user_status_check.get("response", ""),
+                    "agent_activated": "router_node",
+                    "metadata": {
+                        "user_status": "inactive",
+                        "channel": channel,
+                        "execution_time_ms": (time.time() - start_time) * 1000,
+                        "timestamp": datetime.now().isoformat()
+                    }
+                }
+            
             # Determina tipo de conteúdo
             if content_type == "image":
                 # Roteia para orquestrador de imagem
@@ -133,6 +148,71 @@ class RouterNode(Node):
             "confidence": result.get("confidence", 0.0),
             "routing_decision": result.get("routing_decision", {})
         }
+    
+    async def _check_user_status(self, user_id: str) -> Dict[str, Any]:
+        """
+        Verifica se o usuário está ativo ou inativo (centralizado para ambos os canais)
+        """
+        try:
+            # Busca dados do usuário
+            from app.services.memory import memory_manager
+            user_data = await memory_manager.get_user_by_id(user_id)
+            
+            if not user_data:
+                # Usuário não encontrado - considera inativo
+                return {
+                    "inactive": True,
+                    "response": """🚫 **Acesso Restrito**
+
+Sua conta não foi encontrada em nosso sistema.
+
+🔗 **Para acessar o BodyFlow.ai:**
+📱 Acesse: [bodyflow.ai](https://bodyflow.ai)
+👤 Crie sua conta ou faça login
+✅ Após o cadastro, volte aqui para continuar
+
+Se você já tem uma conta, verifique se:
+• Seu número de telefone está correto
+• Sua conta foi ativada
+• Você completou o processo de cadastro
+
+🆘 **Precisa de ajuda?**
+Entre em contato conosco através do site."""
+                }
+            
+            # Verifica se o usuário está ativo
+            is_active = user_data.get("is_active", False)
+            
+            if not is_active:
+                return {
+                    "inactive": True,
+                    "response": """⏸️ **Conta Inativa**
+
+Sua conta está temporariamente inativa.
+
+🔗 **Para reativar sua conta:**
+📱 Acesse: [bodyflow.ai](https://bodyflow.ai)
+👤 Faça login em sua conta
+🔄 Reative sua assinatura ou plano
+✅ Após a reativação, volte aqui para continuar
+
+💡 **Possíveis motivos:**
+• Assinatura expirada
+• Pagamento pendente
+• Conta suspensa temporariamente
+• Renovação necessária
+
+🆘 **Precisa de ajuda?**
+Entre em contato conosco através do site."""
+                }
+            
+            # Usuário está ativo
+            return {"inactive": False}
+            
+        except Exception as e:
+            print(f"❌ Erro ao verificar status do usuário: {e}")
+            # Em caso de erro, permite continuar (não bloqueia)
+            return {"inactive": False}
     
     async def _handle_session_timeout(self, user_id: str) -> None:
         """Gerencia timeout de sessão"""

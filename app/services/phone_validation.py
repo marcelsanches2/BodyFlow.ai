@@ -19,7 +19,7 @@ class PhoneValidationService:
     """Serviço para validação e persistência de números de telefone"""
     
     def __init__(self):
-        self.validation_duration_hours = 24  # Validação válida por 24 horas
+        self.validation_duration_hours = 720  # Validação válida por 30 dias (720 horas)
     
     async def validate_phone_from_contact(self, phone_number: str, user_info: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -90,7 +90,7 @@ class PhoneValidationService:
             if user and user.get('phone_validated_at'):
                 # Verifica se a validação ainda é válida
                 validated_at = datetime.fromisoformat(user['phone_validated_at'].replace('Z', '+00:00'))
-                validation_threshold = datetime.now() - timedelta(hours=self.validation_duration_hours)
+                validation_threshold = datetime.now(validated_at.tzinfo) - timedelta(hours=self.validation_duration_hours)
                 
                 if validated_at > validation_threshold:
                     print(f"✅ Telefone {normalized_phone} já validado recentemente")
@@ -122,7 +122,7 @@ class PhoneValidationService:
             if user and user.get('phone_validated_at'):
                 # Verifica se a validação ainda é válida
                 validated_at = datetime.fromisoformat(user['phone_validated_at'].replace('Z', '+00:00'))
-                validation_threshold = datetime.now() - timedelta(hours=self.validation_duration_hours)
+                validation_threshold = datetime.now(validated_at.tzinfo) - timedelta(hours=self.validation_duration_hours)
                 
                 if validated_at > validation_threshold:
                     return user
