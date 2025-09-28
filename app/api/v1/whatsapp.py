@@ -135,20 +135,8 @@ def _clean_message_for_whatsapp(message: str) -> str:
     # Remove caracteres problemáticos
     cleaned = str(message).strip()
     
-    # Substitui caracteres especiais por versões simples
+    # Substitui apenas caracteres problemáticos específicos do WhatsApp
     replacements = {
-        'á': 'a', 'à': 'a', 'ã': 'a', 'â': 'a', 'ä': 'a',
-        'é': 'e', 'è': 'e', 'ê': 'e', 'ë': 'e',
-        'í': 'i', 'ì': 'i', 'î': 'i', 'ï': 'i',
-        'ó': 'o', 'ò': 'o', 'õ': 'o', 'ô': 'o', 'ö': 'o',
-        'ú': 'u', 'ù': 'u', 'û': 'u', 'ü': 'u',
-        'ç': 'c', 'ñ': 'n',
-        'Á': 'A', 'À': 'A', 'Ã': 'A', 'Â': 'A', 'Ä': 'A',
-        'É': 'E', 'È': 'E', 'Ê': 'E', 'Ë': 'E',
-        'Í': 'I', 'Ì': 'I', 'Î': 'I', 'Ï': 'I',
-        'Ó': 'O', 'Ò': 'O', 'Õ': 'O', 'Ô': 'O', 'Ö': 'O',
-        'Ú': 'U', 'Ù': 'U', 'Û': 'U', 'Ü': 'U',
-        'Ç': 'C', 'Ñ': 'N',
         '"': '"', '"': '"',
         ''': "'", ''': "'",
         '–': '-', '—': '-',

@@ -381,6 +381,10 @@ Como posso te ajudar hoje?
 📊 **Análise corporal** → Feedback sobre evolução, composição e pontos que podemos melhorar
 🍽️ **Receitas fitness** → Pratos rápidos, saudáveis e fáceis de incluir na rotina
 
+📸 **Ou envie fotos de:**
+• 🍽️ **Pratos de comida** → Cálculo automático de calorias e nutrientes
+• 📊 **Bioimpedância** → Análise completa da composição corporal
+
 💪 **Escolha uma opção ou me diga direto seu objetivo que eu preparo algo pra você!**"""
                 }
             else:

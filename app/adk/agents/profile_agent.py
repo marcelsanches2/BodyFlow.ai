@@ -504,6 +504,10 @@ Vou te ajudar a criar seu perfil personalizado para treinos e dietas.
 Vamos começar com algumas informações básicas:
 
 **Qual sua idade?**
+
+📸 **Dica:** Você também pode enviar fotos de:
+• 🍽️ **Pratos de comida** → Cálculo automático de calorias e nutrientes
+• 📊 **Bioimpedância** → Análise completa da composição corporal
 """
             
             return {

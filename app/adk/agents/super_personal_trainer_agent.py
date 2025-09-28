@@ -116,6 +116,10 @@ Isso me permitirá oferecer:
 • Receitas que combinam com seu estilo de vida
 • Acompanhamento personalizado da sua evolução
 
+📸 **Você também pode enviar fotos de:**
+• 🍽️ **Pratos de comida** → Calculo automático de calorias e nutrientes
+• 📊 **Bioimpedância** → Análise completa da composição corporal
+
 Vamos começar:
 
 **Qual sua idade?**
