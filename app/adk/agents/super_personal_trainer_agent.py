@@ -459,6 +459,293 @@ ANÁLISE DE COMPOSIÇÃO CORPORAL DETALHADA:
 - Verifique se a imagem está clara e legível
 """
             
+            # Dados de análise de exercício
+            elif 'exercise_analysis' in image_context_data:
+                exercise_analysis = image_context_data['exercise_analysis']
+                if exercise_analysis.get('success', False):
+                    analysis = exercise_analysis.get('analysis', {})
+                    
+                    exercise_name = analysis.get('exercise_name', 'Exercício não identificado')
+                    muscle_groups = analysis.get('muscle_groups', [])
+                    execution = analysis.get('execution_analysis', {})
+                    suggestions = analysis.get('suggestions', [])
+                    safety_notes = analysis.get('safety_notes', 'Não fornecido')
+                    difficulty = analysis.get('difficulty_level', 'Não identificado')
+                    equipment = analysis.get('equipment_needed', 'Não identificado')
+                    confidence = analysis.get('confidence', 0)
+                    reasoning = analysis.get('reasoning', 'Não fornecido')
+                    
+                    muscle_list = ', '.join(muscle_groups) if muscle_groups else 'Não identificados'
+                    suggestions_list = '\n'.join([f"• {s}" for s in suggestions]) if suggestions else 'Não fornecidas'
+                    
+                    return f"""
+ANÁLISE DE EXERCÍCIO DETALHADA:
+
+💪 EXERCÍCIO IDENTIFICADO:
+- Nome: {exercise_name}
+- Músculos trabalhados: {muscle_list}
+- Nível de dificuldade: {difficulty}
+- Equipamento necessário: {equipment}
+
+📊 ANÁLISE DE EXECUÇÃO:
+- Pontuação da forma: {execution.get('form_score', 'N/A')}/10
+- Observações de postura: {execution.get('posture_notes', 'Não fornecidas')}
+- Observações de técnica: {execution.get('technique_notes', 'Não fornecidas')}
+
+💡 SUGESTÕES DE MELHORIA:
+{suggestions_list}
+
+⚠️ OBSERVAÇÕES DE SEGURANÇA:
+{safety_notes}
+
+📈 CONFIABILIDADE:
+- Confiança da análise: {confidence:.1%}
+
+🧠 EXPLICAÇÃO DA ANÁLISE:
+{reasoning}
+"""
+                else:
+                    return """
+ANÁLISE DE EXERCÍCIO - NÃO CONSEGUIU IDENTIFICAR:
+
+❌ RESULTADO DA ANÁLISE:
+- Não foi possível analisar o exercício na imagem
+- A imagem pode estar com baixa qualidade ou não mostrar exercício claramente
+- Análise de técnica não disponível
+
+🔍 POSSÍVEIS CAUSAS:
+- Imagem muito escura ou desfocada
+- Exercício não está claramente visível
+- Pessoa não está em posição de exercício
+- Qualidade da foto muito baixa
+
+💡 SUGESTÕES:
+- Tente tirar uma nova foto com melhor iluminação
+- Certifique-se de que o exercício está bem visível
+- Evite sombras ou reflexos na imagem
+- Mantenha a câmera estável e focada
+"""
+            
+            # Dados de análise corporal
+            elif 'body_analysis' in image_context_data:
+                body_analysis = image_context_data['body_analysis']
+                if body_analysis.get('success', False):
+                    analysis = body_analysis.get('analysis', {})
+                    
+                    composition = analysis.get('body_composition', {})
+                    development_areas = analysis.get('development_areas', [])
+                    diet_suggestions = analysis.get('diet_suggestions', [])
+                    training_suggestions = analysis.get('training_suggestions', [])
+                    positive_notes = analysis.get('positive_notes', 'Não fornecidas')
+                    confidence = analysis.get('confidence', 0)
+                    reasoning = analysis.get('reasoning', 'Não fornecido')
+                    
+                    dev_areas_list = '\n'.join([f"• {area}" for area in development_areas]) if development_areas else 'Não identificadas'
+                    diet_list = '\n'.join([f"• {suggestion}" for suggestion in diet_suggestions]) if diet_suggestions else 'Não fornecidas'
+                    training_list = '\n'.join([f"• {suggestion}" for suggestion in training_suggestions]) if training_suggestions else 'Não fornecidas'
+                    
+                    return f"""
+ANÁLISE CORPORAL DETALHADA:
+
+👤 COMPOSIÇÃO CORPORAL:
+- Definição muscular: {composition.get('muscle_definition', 'Não analisada')}
+- Estimativa de gordura corporal: {composition.get('body_fat_estimate', 'Não analisada')}
+- Condição geral: {composition.get('overall_condition', 'Não analisada')}
+
+🎯 ÁREAS DE DESENVOLVIMENTO:
+{dev_areas_list}
+
+🥗 SUGESTÕES DE DIETA:
+{diet_list}
+
+💪 SUGESTÕES DE TREINO:
+{training_list}
+
+✨ OBSERVAÇÕES POSITIVAS:
+{positive_notes}
+
+📈 CONFIABILIDADE:
+- Confiança da análise: {confidence:.1%}
+
+🧠 EXPLICAÇÃO DA ANÁLISE:
+{reasoning}
+"""
+                else:
+                    return """
+ANÁLISE CORPORAL - NÃO CONSEGUIU IDENTIFICAR:
+
+❌ RESULTADO DA ANÁLISE:
+- Não foi possível analisar a imagem corporal
+- A imagem pode estar com baixa qualidade ou não mostrar o corpo claramente
+- Análise de composição corporal não disponível
+
+🔍 POSSÍVEIS CAUSAS:
+- Imagem muito escura ou desfocada
+- Corpo não está claramente visível
+- Imagem não mostra composição corporal adequada
+- Qualidade da foto muito baixa
+
+💡 SUGESTÕES:
+- Tente tirar uma nova foto com melhor iluminação
+- Certifique-se de que o corpo está bem visível
+- Evite sombras ou reflexos na imagem
+- Mantenha a câmera estável e focada
+"""
+            
+            # Dados de análise de rótulo
+            elif 'label_analysis' in image_context_data:
+                label_analysis = image_context_data['label_analysis']
+                if label_analysis.get('success', False):
+                    analysis = label_analysis.get('analysis', {})
+                    
+                    product_name = analysis.get('product_name', 'Produto não identificado')
+                    nutritional_info = analysis.get('nutritional_info', {})
+                    serving_size = analysis.get('serving_size', 'Não identificado')
+                    ingredients = analysis.get('ingredients', [])
+                    health_notes = analysis.get('health_notes', [])
+                    red_flags = analysis.get('red_flags', [])
+                    overall_rating = analysis.get('overall_rating', 'Não avaliado')
+                    confidence = analysis.get('confidence', 0)
+                    reasoning = analysis.get('reasoning', 'Não fornecido')
+                    
+                    ingredients_list = ', '.join(ingredients) if ingredients else 'Não identificados'
+                    health_list = '\n'.join([f"• {note}" for note in health_notes]) if health_notes else 'Não fornecidas'
+                    red_flags_list = '\n'.join([f"• {flag}" for flag in red_flags]) if red_flags else 'Nenhum ponto de atenção identificado'
+                    
+                    return f"""
+ANÁLISE DE RÓTULO NUTRICIONAL DETALHADA:
+
+🏷️ PRODUTO:
+- Nome: {product_name}
+- Tamanho da porção: {serving_size}
+
+📊 INFORMAÇÕES NUTRICIONAIS:
+- Calorias por porção: {nutritional_info.get('calories_per_serving', 'N/A')}
+- Proteína: {nutritional_info.get('protein', 'N/A')}
+- Carboidratos: {nutritional_info.get('carbs', 'N/A')}
+- Gordura: {nutritional_info.get('fat', 'N/A')}
+- Açúcar: {nutritional_info.get('sugar', 'N/A')}
+- Sódio: {nutritional_info.get('sodium', 'N/A')}
+- Fibras: {nutritional_info.get('fiber', 'N/A')}
+
+🧪 INGREDIENTES:
+{ingredients_list}
+
+✅ OBSERVAÇÕES DE SAÚDE:
+{health_list}
+
+⚠️ PONTOS DE ATENÇÃO:
+{red_flags_list}
+
+⭐ AVALIAÇÃO GERAL:
+{overall_rating}
+
+📈 CONFIABILIDADE:
+- Confiança da análise: {confidence:.1%}
+
+🧠 EXPLICAÇÃO DA ANÁLISE:
+{reasoning}
+"""
+                else:
+                    return """
+ANÁLISE DE RÓTULO - NÃO CONSEGUIU IDENTIFICAR:
+
+❌ RESULTADO DA ANÁLISE:
+- Não foi possível analisar o rótulo nutricional
+- A imagem pode estar com baixa qualidade ou não mostrar o rótulo claramente
+- Análise nutricional não disponível
+
+🔍 POSSÍVEIS CAUSAS:
+- Imagem muito escura ou desfocada
+- Rótulo não está claramente visível
+- Texto muito pequeno ou ilegível
+- Qualidade da foto muito baixa
+
+💡 SUGESTÕES:
+- Tente tirar uma nova foto com melhor iluminação
+- Certifique-se de que o rótulo está bem visível
+- Evite reflexos ou sombras na imagem
+- Mantenha a câmera estável e focada
+"""
+            
+            # Dados de análise de planilha de treino
+            elif 'planilha_analysis' in image_context_data:
+                planilha_analysis = image_context_data['planilha_analysis']
+                if planilha_analysis.get('success', False):
+                    analysis = planilha_analysis.get('analysis', {})
+                    
+                    workout_type = analysis.get('workout_type', 'Tipo não identificado')
+                    exercises = analysis.get('exercises', [])
+                    structure = analysis.get('workout_structure', {})
+                    progression_notes = analysis.get('progression_notes', 'Não fornecidas')
+                    suggestions = analysis.get('suggestions', [])
+                    overall_assessment = analysis.get('overall_assessment', 'Não fornecida')
+                    confidence = analysis.get('confidence', 0)
+                    reasoning = analysis.get('reasoning', 'Não fornecido')
+                    
+                    exercises_list = []
+                    for exercise in exercises:
+                        name = exercise.get('name', 'Exercício não identificado')
+                        sets = exercise.get('sets', 'N/A')
+                        reps = exercise.get('reps', 'N/A')
+                        weight = exercise.get('weight', 'N/A')
+                        notes = exercise.get('notes', '')
+                        exercises_list.append(f"• {name}: {sets} séries x {reps} reps @ {weight}kg {notes}")
+                    
+                    exercises_text = '\n'.join(exercises_list) if exercises_list else 'Nenhum exercício identificado'
+                    suggestions_list = '\n'.join([f"• {s}" for s in suggestions]) if suggestions else 'Não fornecidas'
+                    
+                    return f"""
+ANÁLISE DE PLANILHA DE TREINO DETALHADA:
+
+🏋️ TIPO DE TREINO:
+{workout_type}
+
+📋 ESTRUTURA DO TREINO:
+- Total de exercícios: {structure.get('total_exercises', 'N/A')}
+- Duração estimada: {structure.get('estimated_duration', 'N/A')}
+- Nível de dificuldade: {structure.get('difficulty_level', 'N/A')}
+
+💪 EXERCÍCIOS IDENTIFICADOS:
+{exercises_text}
+
+📈 OBSERVAÇÕES SOBRE PROGRESSÃO:
+{progression_notes}
+
+💡 SUGESTÕES DE MELHORIA:
+{suggestions_list}
+
+⭐ AVALIAÇÃO GERAL:
+{overall_assessment}
+
+📊 CONFIABILIDADE:
+- Confiança da análise: {confidence:.1%}
+
+🧠 EXPLICAÇÃO DA ANÁLISE:
+{reasoning}
+"""
+                else:
+                    return """
+ANÁLISE DE PLANILHA - NÃO CONSEGUIU IDENTIFICAR:
+
+❌ RESULTADO DA ANÁLISE:
+- Não foi possível analisar a planilha de treino
+- A imagem pode estar com baixa qualidade ou não mostrar a planilha claramente
+- Análise de treino não disponível
+
+🔍 POSSÍVEIS CAUSAS:
+- Imagem muito escura ou desfocada
+- Planilha não está claramente visível
+- Texto muito pequeno ou ilegível
+- Qualidade da foto muito baixa
+
+💡 SUGESTÕES:
+- Tente tirar uma nova foto com melhor iluminação
+- Certifique-se de que a planilha está bem visível
+- Evite reflexos ou sombras na imagem
+- Mantenha a câmera estável e focada
+"""
+            
             # Dados genéricos
             else:
                 return f"""

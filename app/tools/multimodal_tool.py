@@ -123,6 +123,134 @@ class MultimodalTool(Tool):
                 "confidence": analysis.get("confidence", 0.5)
             }
     
+    async def analyze_exercise_image(self, image_data: bytes) -> Dict[str, Any]:
+        """
+        Analisa imagem de exercícios usando LLM
+        """
+        try:
+            print(f"💪 MultimodalTool: Iniciando análise de imagem de exercício...")
+            print(f"📊 Tamanho da imagem: {len(image_data)} bytes")
+            
+            # Converte imagem para base64 para envio ao LLM
+            image_base64 = base64.b64encode(image_data).decode('utf-8')
+            print(f"🔄 MultimodalTool: Imagem convertida para base64 ({len(image_base64)} caracteres)")
+            
+            # Analisa usando LLM
+            analysis = await self._analyze_exercise_with_llm(image_base64)
+            
+            print(f"✅ MultimodalTool: Análise de exercício finalizada com sucesso!")
+            print(f"📋 Resultado final: {analysis}")
+            
+            return {
+                "success": True,
+                "analysis": analysis,
+                "confidence": analysis.get("confidence", 0.7)
+            }
+            
+        except Exception as e:
+            print(f"❌ Erro na análise de exercício: {e}")
+            return {
+                "success": False,
+                "error": str(e)[:100],
+                "analysis": {}
+            }
+    
+    async def analyze_body_image(self, image_data: bytes) -> Dict[str, Any]:
+        """
+        Analisa imagem corporal usando LLM
+        """
+        try:
+            print(f"👤 MultimodalTool: Iniciando análise de imagem corporal...")
+            print(f"📊 Tamanho da imagem: {len(image_data)} bytes")
+            
+            # Converte imagem para base64 para envio ao LLM
+            image_base64 = base64.b64encode(image_data).decode('utf-8')
+            print(f"🔄 MultimodalTool: Imagem convertida para base64 ({len(image_base64)} caracteres)")
+            
+            # Analisa usando LLM
+            analysis = await self._analyze_body_with_llm(image_base64)
+            
+            print(f"✅ MultimodalTool: Análise corporal finalizada com sucesso!")
+            print(f"📋 Resultado final: {analysis}")
+            
+            return {
+                "success": True,
+                "analysis": analysis,
+                "confidence": analysis.get("confidence", 0.7)
+            }
+            
+        except Exception as e:
+            print(f"❌ Erro na análise corporal: {e}")
+            return {
+                "success": False,
+                "error": str(e)[:100],
+                "analysis": {}
+            }
+    
+    async def analyze_label_image(self, image_data: bytes) -> Dict[str, Any]:
+        """
+        Analisa imagem de rótulo nutricional usando LLM
+        """
+        try:
+            print(f"🏷️ MultimodalTool: Iniciando análise de rótulo nutricional...")
+            print(f"📊 Tamanho da imagem: {len(image_data)} bytes")
+            
+            # Converte imagem para base64 para envio ao LLM
+            image_base64 = base64.b64encode(image_data).decode('utf-8')
+            print(f"🔄 MultimodalTool: Imagem convertida para base64 ({len(image_base64)} caracteres)")
+            
+            # Analisa usando LLM
+            analysis = await self._analyze_label_with_llm(image_base64)
+            
+            print(f"✅ MultimodalTool: Análise de rótulo finalizada com sucesso!")
+            print(f"📋 Resultado final: {analysis}")
+            
+            return {
+                "success": True,
+                "analysis": analysis,
+                "confidence": analysis.get("confidence", 0.7)
+            }
+            
+        except Exception as e:
+            print(f"❌ Erro na análise de rótulo: {e}")
+            return {
+                "success": False,
+                "error": str(e)[:100],
+                "analysis": {}
+            }
+    
+    async def analyze_treino_planilha_image(self, image_data: bytes) -> Dict[str, Any]:
+        """
+        Analisa imagem de planilha de treino usando LLM
+        """
+        try:
+            print(f"📋 MultimodalTool: Iniciando análise de planilha de treino...")
+            print(f"📊 Tamanho da imagem: {len(image_data)} bytes")
+            
+            # Converte imagem para base64 para envio ao LLM
+            image_base64 = base64.b64encode(image_data).decode('utf-8')
+            print(f"🔄 MultimodalTool: Imagem convertida para base64 ({len(image_base64)} caracteres)")
+            
+            # Analisa usando LLM
+            analysis = await self._analyze_treino_planilha_with_llm(image_base64)
+            
+            print(f"✅ MultimodalTool: Análise de planilha finalizada com sucesso!")
+            print(f"📋 Resultado final: {analysis}")
+            
+            return {
+                "success": True,
+                "analysis": analysis,
+                "confidence": analysis.get("confidence", 0.7)
+            }
+            
+        except Exception as e:
+            print(f"❌ Erro na análise de planilha: {e}")
+            return {
+                "success": False,
+                "error": str(e)[:100],
+                "analysis": {}
+            }
+    
     async def _placeholder_classify(self, image: Image.Image, image_type: str) -> Dict[str, Any]:
         """
         Classificação robusta de imagem usando LLM
@@ -677,3 +805,367 @@ Analise cuidadosamente a **imagem enviada de comida** e identifique todos os ali
             "confidence": 0.6,
             "analysis_method": "placeholder"
         }
+    
+    async def _analyze_exercise_with_llm(self, image_base64: str) -> Dict[str, Any]:
+        """
+        Analisa imagem de exercício usando LLM
+        """
+        try:
+            prompt = f"""
+Você é um especialista em análise de exercícios físicos e personal trainer.
+Analise a imagem e forneça uma análise detalhada do exercício mostrado.
+
+INSTRUÇÕES:
+1. Identifique o exercício específico sendo realizado
+2. Analise a técnica e execução
+3. Identifique os músculos trabalhados
+4. Avalie a postura e forma
+5. Sugira melhorias ou ajustes
+6. Considere segurança e eficácia
+
+ESTRUTURA DE SAÍDA OBRIGATÓRIA:
+```json
+{{
+  "exercise_name": "nome_do_exercício",
+  "muscle_groups": ["músculo_1", "músculo_2"],
+  "execution_analysis": {{
+    "form_score": 1_a_10,
+    "posture_notes": "observações_sobre_postura",
+    "technique_notes": "observações_sobre_técnica"
+  }},
+  "suggestions": [
+    "sugestão_1",
+    "sugestão_2",
+    "sugestão_3"
+  ],
+  "safety_notes": "observações_de_segurança",
+  "difficulty_level": "iniciante/intermediário/avançado",
+  "equipment_needed": "equipamento_necessário",
+  "confidence": 0.0_a_1.0,
+  "reasoning": "explicação_detalhada_da_análise"
+}}"""
+            
+            response = await llm_service.call_with_fallback(
+                messages=[{
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_base64}"}}
+                    ]
+                }],
+                max_tokens=800,
+                temperature=0.1
+            )
+            
+            # Extrai JSON da resposta
+            import json
+            import re
+            
+            cleaned_response = response.strip()
+            if "```json" in cleaned_response:
+                cleaned_response = cleaned_response.split("```json")[1].split("```")[0]
+            elif "```" in cleaned_response:
+                cleaned_response = cleaned_response.split("```")[1].split("```")[0]
+            
+            # Remove texto antes e depois do JSON
+            json_match = re.search(r'\{.*\}', cleaned_response, re.DOTALL)
+            if json_match:
+                cleaned_response = json_match.group(0)
+            
+            analysis = json.loads(cleaned_response.strip())
+            return analysis
+            
+        except Exception as e:
+            print(f"❌ Erro na análise de exercício: {e}")
+            return {
+                "exercise_name": "exercício não identificado",
+                "muscle_groups": ["músculos não identificados"],
+                "execution_analysis": {
+                    "form_score": 5,
+                    "posture_notes": "Não foi possível analisar a postura",
+                    "technique_notes": "Não foi possível analisar a técnica"
+                },
+                "suggestions": ["Consulte um personal trainer para análise detalhada"],
+                "safety_notes": "Sempre pratique exercícios com supervisão adequada",
+                "difficulty_level": "indeterminado",
+                "equipment_needed": "não identificado",
+                "confidence": 0.1,
+                "reasoning": f"Erro na análise LLM: {str(e)[:100]}"
+            }
+    
+    async def _analyze_body_with_llm(self, image_base64: str) -> Dict[str, Any]:
+        """
+        Analisa imagem corporal usando LLM
+        """
+        try:
+            prompt = f"""
+Você é um especialista em análise corporal e composição física.
+Analise a imagem corporal de forma respeitosa e profissional.
+
+INSTRUÇÕES:
+1. Analise a composição corporal geral
+2. Identifique áreas de desenvolvimento
+3. Sugira ajustes na dieta e treino
+4. Mantenha tom positivo e motivador
+5. Foque em saúde e bem-estar
+6. Evite comentários negativos ou críticos
+
+ESTRUTURA DE SAÍDA OBRIGATÓRIA:
+```json
+{{
+  "body_composition": {{
+    "muscle_definition": "baixa/média/alta",
+    "body_fat_estimate": "baixo/médio/alto",
+    "overall_condition": "descrição_geral"
+  }},
+  "development_areas": [
+    "área_1",
+    "área_2",
+    "área_3"
+  ],
+  "diet_suggestions": [
+    "sugestão_dieta_1",
+    "sugestão_dieta_2"
+  ],
+  "training_suggestions": [
+    "sugestão_treino_1",
+    "sugestão_treino_2"
+  ],
+  "positive_notes": "observações_positivas",
+  "confidence": 0.0_a_1.0,
+  "reasoning": "explicação_detalhada_da_análise"
+}}"""
+            
+            response = await llm_service.call_with_fallback(
+                messages=[{
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_base64}"}}
+                    ]
+                }],
+                max_tokens=600,
+                temperature=0.1
+            )
+            
+            # Extrai JSON da resposta
+            import json
+            import re
+            
+            cleaned_response = response.strip()
+            if "```json" in cleaned_response:
+                cleaned_response = cleaned_response.split("```json")[1].split("```")[0]
+            elif "```" in cleaned_response:
+                cleaned_response = cleaned_response.split("```")[1].split("```")[0]
+            
+            json_match = re.search(r'\{.*\}', cleaned_response, re.DOTALL)
+            if json_match:
+                cleaned_response = json_match.group(0)
+            
+            analysis = json.loads(cleaned_response.strip())
+            return analysis
+            
+        except Exception as e:
+            print(f"❌ Erro na análise corporal: {e}")
+            return {
+                "body_composition": {
+                    "muscle_definition": "não analisado",
+                    "body_fat_estimate": "não analisado",
+                    "overall_condition": "Não foi possível analisar"
+                },
+                "development_areas": ["Consulte um profissional para análise detalhada"],
+                "diet_suggestions": ["Mantenha uma alimentação equilibrada"],
+                "training_suggestions": ["Consulte um personal trainer"],
+                "positive_notes": "Continue focado nos seus objetivos",
+                "confidence": 0.1,
+                "reasoning": f"Erro na análise LLM: {str(e)[:100]}"
+            }
+    
+    async def _analyze_label_with_llm(self, image_base64: str) -> Dict[str, Any]:
+        """
+        Analisa imagem de rótulo nutricional usando LLM
+        """
+        try:
+            prompt = f"""
+Você é um especialista em análise de rótulos nutricionais.
+Analise a imagem do rótulo e extraia as informações nutricionais principais.
+
+INSTRUÇÕES:
+1. Extraia informações nutricionais principais
+2. Identifique pontos de atenção (açúcar, sódio, etc.)
+3. Avalie a qualidade nutricional geral
+4. Sugira alternativas se necessário
+5. Foque nos aspectos mais relevantes para saúde
+
+ESTRUTURA DE SAÍDA OBRIGATÓRIA:
+```json
+{{
+  "product_name": "nome_do_produto",
+  "nutritional_info": {{
+    "calories_per_serving": número,
+    "protein": "valor_proteína",
+    "carbs": "valor_carboidratos",
+    "fat": "valor_gordura",
+    "sugar": "valor_açúcar",
+    "sodium": "valor_sódio",
+    "fiber": "valor_fibras"
+  }},
+  "serving_size": "tamanho_da_porção",
+  "ingredients": ["ingrediente_1", "ingrediente_2"],
+  "health_notes": [
+    "nota_saúde_1",
+    "nota_saúde_2"
+  ],
+  "red_flags": ["ponto_atencao_1", "ponto_atencao_2"],
+  "overall_rating": "ruim/regular/bom/excelente",
+  "confidence": 0.0_a_1.0,
+  "reasoning": "explicação_detalhada_da_análise"
+}}"""
+            
+            response = await llm_service.call_with_fallback(
+                messages=[{
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_base64}"}}
+                    ]
+                }],
+                max_tokens=700,
+                temperature=0.1
+            )
+            
+            # Extrai JSON da resposta
+            import json
+            import re
+            
+            cleaned_response = response.strip()
+            if "```json" in cleaned_response:
+                cleaned_response = cleaned_response.split("```json")[1].split("```")[0]
+            elif "```" in cleaned_response:
+                cleaned_response = cleaned_response.split("```")[1].split("```")[0]
+            
+            json_match = re.search(r'\{.*\}', cleaned_response, re.DOTALL)
+            if json_match:
+                cleaned_response = json_match.group(0)
+            
+            analysis = json.loads(cleaned_response.strip())
+            return analysis
+            
+        except Exception as e:
+            print(f"❌ Erro na análise de rótulo: {e}")
+            return {
+                "product_name": "produto não identificado",
+                "nutritional_info": {
+                    "calories_per_serving": 0,
+                    "protein": "não identificado",
+                    "carbs": "não identificado",
+                    "fat": "não identificado",
+                    "sugar": "não identificado",
+                    "sodium": "não identificado",
+                    "fiber": "não identificado"
+                },
+                "serving_size": "não identificado",
+                "ingredients": ["Não foi possível identificar ingredientes"],
+                "health_notes": ["Consulte um nutricionista para análise detalhada"],
+                "red_flags": ["Não foi possível analisar"],
+                "overall_rating": "não avaliado",
+                "confidence": 0.1,
+                "reasoning": f"Erro na análise LLM: {str(e)[:100]}"
+            }
+    
+    async def _analyze_treino_planilha_with_llm(self, image_base64: str) -> Dict[str, Any]:
+        """
+        Analisa imagem de planilha de treino usando LLM
+        """
+        try:
+            prompt = f"""
+Você é um especialista em análise de planilhas e programas de treino.
+Analise a imagem da planilha de treino e extraia as informações principais.
+
+INSTRUÇÕES:
+1. Identifique os exercícios listados
+2. Extraia séries, repetições e cargas
+3. Analise a estrutura do treino
+4. Avalie a progressão e organização
+5. Sugira melhorias se necessário
+6. Identifique o tipo de treino (força, hipertrofia, etc.)
+
+ESTRUTURA DE SAÍDA OBRIGATÓRIA:
+```json
+{{
+  "workout_type": "tipo_de_treino",
+  "exercises": [
+    {{
+      "name": "nome_exercício",
+      "sets": número_séries,
+      "reps": "número_repetições",
+      "weight": "carga_peso",
+      "notes": "observações_adicionais"
+    }}
+  ],
+  "workout_structure": {{
+    "total_exercises": número,
+    "estimated_duration": "tempo_estimado",
+    "difficulty_level": "iniciante/intermediário/avançado"
+  }},
+  "progression_notes": "observações_sobre_progressão",
+  "suggestions": [
+    "sugestão_1",
+    "sugestão_2"
+  ],
+  "overall_assessment": "avaliação_geral",
+  "confidence": 0.0_a_1.0,
+  "reasoning": "explicação_detalhada_da_análise"
+}}"""
+            
+            response = await llm_service.call_with_fallback(
+                messages=[{
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_base64}"}}
+                    ]
+                }],
+                max_tokens=1000,
+                temperature=0.1
+            )
+            
+            # Extrai JSON da resposta
+            import json
+            import re
+            
+            cleaned_response = response.strip()
+            if "```json" in cleaned_response:
+                cleaned_response = cleaned_response.split("```json")[1].split("```")[0]
+            elif "```" in cleaned_response:
+                cleaned_response = cleaned_response.split("```")[1].split("```")[0]
+            
+            json_match = re.search(r'\{.*\}', cleaned_response, re.DOTALL)
+            if json_match:
+                cleaned_response = json_match.group(0)
+            
+            analysis = json.loads(cleaned_response.strip())
+            return analysis
+            
+        except Exception as e:
+            print(f"❌ Erro na análise de planilha: {e}")
+            return {
+                "workout_type": "treino não identificado",
+                "exercises": [{
+                    "name": "exercício não identificado",
+                    "sets": 0,
+                    "reps": "não identificado",
+                    "weight": "não identificado",
+                    "notes": "Não foi possível analisar"
+                }],
+                "workout_structure": {
+                    "total_exercises": 0,
+                    "estimated_duration": "não estimado",
+                    "difficulty_level": "indeterminado"
+                },
+                "progression_notes": "Não foi possível analisar a progressão",
+                "suggestions": ["Consulte um personal trainer para análise detalhada"],
+                "overall_assessment": "Não foi possível avaliar",
+                "confidence": 0.1,
+                "reasoning": f"Erro na análise LLM: {str(e)[:100]}"
+            }

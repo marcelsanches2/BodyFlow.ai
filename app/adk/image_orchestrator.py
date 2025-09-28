@@ -158,16 +158,28 @@ class ImageOrchestratorNode(Node):
                     "focus_areas": ["composição corporal", "evolução", "ajustes na dieta e treino"]
                 })
             elif image_class == "exercise":
+                exercise_analysis = await self.multimodal_tool.analyze_exercise_image(image_data)
                 context.update({
+                    "exercise_analysis": exercise_analysis,
                     "focus_areas": ["execução", "músculos trabalhados", "ajuste de carga/postura"]
                 })
             elif image_class == "body":
+                body_analysis = await self.multimodal_tool.analyze_body_image(image_data)
                 context.update({
+                    "body_analysis": body_analysis,
                     "focus_areas": ["composição corporal", "ajustes na dieta e treino", "progressão"]
                 })
             elif image_class == "label":
+                label_analysis = await self.multimodal_tool.analyze_label_image(image_data)
                 context.update({
+                    "label_analysis": label_analysis,
                     "focus_areas": ["açúcar", "proteína", "sódio", "calorias", "ingredientes"]
+                })
+            elif image_class == "treino_planilha":
+                planilha_analysis = await self.multimodal_tool.analyze_treino_planilha_image(image_data)
+                context.update({
+                    "planilha_analysis": planilha_analysis,
+                    "focus_areas": ["estrutura do treino", "exercícios", "progressão", "sugestões"]
                 })
             
             return context
@@ -186,7 +198,8 @@ class ImageOrchestratorNode(Node):
             "bioimpedancia": "análise de composição corporal",
             "exercise": "análise de exercício",
             "body": "análise corporal",
-            "label": "análise de rótulo nutricional"
+            "label": "análise de rótulo nutricional",
+            "treino_planilha": "análise de planilha de treino"
         }
         return analysis_types.get(image_class, "análise geral")
     
@@ -197,7 +210,8 @@ class ImageOrchestratorNode(Node):
             "bioimpedancia": "comentários sobre composição corporal e ajustes na dieta + treino",
             "exercise": "feedback sobre execução, músculos trabalhados e ajustes",
             "body": "comentários gerais de composição corporal e sugestões de melhoria",
-            "label": "destacar pontos relevantes como açúcar, proteína, sódio, calorias"
+            "label": "destacar pontos relevantes como açúcar, proteína, sódio, calorias",
+            "treino_planilha": "analisar estrutura do treino, exercícios e sugerir melhorias"
         }
         return styles.get(image_class, "análise geral da imagem")
     
