@@ -58,7 +58,7 @@ class ImageOrchestratorNode(Node):
             confidence = classification.get("confidence", 0.0)
             
             # Roteia baseado na classificação - todas as imagens válidas vão para Super Personal Trainer
-            if image_class in ["food", "body", "exercise", "bioimpedancia", "label"]:
+            if image_class in ["food", "body", "exercise", "bioimpedancia", "label", "treino_planilha"]:
                 agent_result = await self._route_to_super_personal_trainer(user_id, image_data, image_class)
             else:
                 return await self._handle_invalid_image("Tipo de imagem não reconhecido")
