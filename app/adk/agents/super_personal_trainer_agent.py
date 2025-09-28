@@ -208,8 +208,8 @@ INSTRUÇÕES:
         # Dados do perfil
         user_name = profile.get("name", "Paciente")
         age = profile.get("age", "N/A")
-        weight = profile.get("weight", "N/A")
-        height = profile.get("height", "N/A")
+        weight = profile.get("current_weight_kg", "N/A")  # Campo correto da tabela user_profile
+        height = profile.get("height_cm", "N/A")  # Campo correto da tabela user_profile
         goal = profile.get("goal", "N/A")
         training_level = profile.get("training_level", "N/A")
         restrictions = profile.get("restrictions", "Nenhuma")
