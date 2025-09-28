@@ -7,7 +7,7 @@ import time
 from typing import Dict, Any, Optional
 from datetime import datetime
 from app.adk.simple_adk import Tool
-from app.services.memory import memory_manager
+from app.services.supabase_observability import supabase_observability_service
 
 class ObservabilityTool(Tool):
     """Tool de observabilidade e telemetria para ADK"""
@@ -38,31 +38,18 @@ class ObservabilityTool(Tool):
         Registra uma interação completa no sistema de observabilidade
         """
         try:
-            log_entry = {
-                "user_id": user_id,
-                "channel": channel,
-                "timestamp": datetime.now().isoformat(),
-                "input": {
-                    "type": input_data.get("type", "text"),
-                    "content_preview": str(input_data.get("content", ""))[:100],
-                    "has_image": "image" in input_data
-                },
-                "agent_chosen": agent_chosen,
-                "response_preview": response[:100],
-                "performance": {
-                    "execution_time_ms": execution_time_ms,
-                    "cost_tokens": cost_tokens
-                },
-                "routing": {
-                    "confidence": confidence,
-                    "decision": routing_decision,
-                    "fallback_used": confidence and confidence < 0.7
-                },
-                "session_id": await self._get_current_session_id(user_id)
-            }
-            
-            await memory_manager.save_observability_log(log_entry)
-            return True
+            # Delega para o serviço de observabilidade do Supabase
+            return await supabase_observability_service.log_interaction(
+                user_id=user_id,
+                channel=channel,
+                input_data=input_data,
+                agent_chosen=agent_chosen,
+                response=response,
+                execution_time_ms=execution_time_ms,
+                routing_decision=routing_decision,
+                cost_tokens=cost_tokens,
+                confidence=confidence
+            )
             
         except Exception as e:
             # Log de erro sem expor dados sensíveis
@@ -78,26 +65,62 @@ class ObservabilityTool(Tool):
         context: Dict[str, Any]
     ) -> bool:
         """
-        Registra transferência entre agentes
+        Registra handoff entre agentes
         """
         try:
-            handoff_entry = {
-                "user_id": user_id,
-                "timestamp": datetime.now().isoformat(),
-                "handoff": {
-                    "from_agent": from_agent,
-                    "to_agent": to_agent,
-                    "reason": reason,
-                    "context_summary": str(context)[:200]
-                },
-                "session_id": await self._get_current_session_id(user_id)
-            }
-            
-            await memory_manager.save_observability_log(handoff_entry)
-            return True
-            
+            return await supabase_observability_service.log_agent_handoff(
+                user_id=user_id,
+                from_agent=from_agent,
+                to_agent=to_agent,
+                reason=reason,
+                context=context
+            )
         except Exception as e:
             await self._log_error("log_agent_handoff", str(e)[:100])
+            return False
+    
+    async def log_error(
+        self,
+        error_type: str,
+        error_message: str,
+        user_id: Optional[str] = None,
+        context: Optional[Dict[str, Any]] = None
+    ) -> bool:
+        """
+        Registra erros no sistema de observabilidade
+        """
+        try:
+            return await supabase_observability_service.log_error(
+                error_type=error_type,
+                error_message=error_message,
+                user_id=user_id,
+                context=context
+            )
+        except Exception as e:
+            print(f"Erro ao registrar erro: {e}")
+            return False
+    
+    async def log_performance_metric(
+        self,
+        metric_name: str,
+        value: float,
+        unit: str,
+        user_id: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None
+    ) -> bool:
+        """
+        Registra métricas de performance
+        """
+        try:
+            return await supabase_observability_service.log_performance_metric(
+                metric_name=metric_name,
+                value=value,
+                unit=unit,
+                user_id=user_id,
+                metadata=metadata
+            )
+        except Exception as e:
+            await self._log_error("log_performance_metric", str(e)[:100])
             return False
     
     async def log_session_event(
@@ -107,60 +130,37 @@ class ObservabilityTool(Tool):
         details: Dict[str, Any]
     ) -> bool:
         """
-        Registra eventos de sessão (criação, timeout, encerramento)
+        Registra eventos de sessão
         """
         try:
-            session_event = {
-                "user_id": user_id,
-                "timestamp": datetime.now().isoformat(),
-                "event_type": event_type,
-                "details": details,
-                "session_id": await self._get_current_session_id(user_id)
-            }
-            
-            await memory_manager.save_observability_log(session_event)
-            return True
-            
+            return await supabase_observability_service.log_session_event(
+                user_id=user_id,
+                event_type=event_type,
+                details=details
+            )
         except Exception as e:
             await self._log_error("log_session_event", str(e)[:100])
             return False
     
-    async def get_performance_metrics(
-        self,
-        user_id: Optional[str] = None,
-        time_range_hours: int = 24
-    ) -> Dict[str, Any]:
+    async def _log_error(self, method_name: str, error_message: str) -> None:
         """
-        Recupera métricas de performance
+        Método auxiliar para registrar erros internos
         """
         try:
-            metrics = await memory_manager.get_performance_metrics(
-                user_id=user_id,
-                time_range_hours=time_range_hours
+            await supabase_observability_service.log_error(
+                error_type=f"observability_tool_{method_name}",
+                error_message=error_message
             )
-            return metrics
-        except Exception as e:
-            await self._log_error("get_performance_metrics", str(e)[:100])
-            return {}
-    
-    async def _get_current_session_id(self, user_id: str) -> str:
-        """Recupera ID da sessão atual"""
-        try:
-            session = await memory_manager.get_active_session(user_id)
-            return session.get("id", "") if session else ""
         except Exception:
-            return ""
-    
-    async def _log_error(self, operation: str, error_message: str) -> None:
-        """Log de erro interno"""
-        try:
-            error_log = {
-                "timestamp": datetime.now().isoformat(),
-                "operation": operation,
-                "error": error_message,
-                "level": "ERROR"
-            }
-            await memory_manager.save_observability_log(error_log)
-        except Exception:
-            # Falha silenciosa para evitar loops de erro
+            # Evita loops infinitos de erro
             pass
+    
+    async def _get_current_session_id(self, user_id: str) -> Optional[str]:
+        """
+        Recupera ID da sessão atual do usuário
+        """
+        try:
+            # Implementação simplificada - em produção seria mais robusta
+            return f"session_{user_id}_{int(time.time())}"
+        except Exception:
+            return None
