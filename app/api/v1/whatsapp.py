@@ -11,6 +11,7 @@ from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import Response
 from twilio.twiml.messaging_response import MessagingResponse
 from app.services.memory import memory_manager
+from app.services.image_storage import image_storage_service
 from app.adk.main_graph import bodyflow_graph
 import logging
 
@@ -37,11 +38,42 @@ async def webhook_whatsapp(request: Request):
             # Determina tipo de conteúdo
             content_type = "text"
             image_data = None
+            image_url = None
             
-            # Verifica se há imagem (placeholder para implementação futura)
-            # if form_data.get("MediaUrl0"):
-            #     content_type = "image"
-            #     # image_data = await download_image(form_data.get("MediaUrl0"))
+            # Verifica se há imagem
+            media_url = form_data.get("MediaUrl0")
+            if media_url:
+                content_type = "image"
+                logger.info(f"📸 Processando imagem do WhatsApp - URL: {media_url}")
+                
+                try:
+                    # Baixa a imagem do Twilio
+                    import httpx
+                    async with httpx.AsyncClient() as client:
+                        response = await client.get(media_url)
+                        if response.status_code == 200:
+                            image_data = response.content
+                            logger.info(f"✅ Imagem baixada com sucesso - Tamanho: {len(image_data)} bytes")
+                            
+                            # Faz upload da imagem para o Supabase Storage
+                            image_url = await image_storage_service.upload_image(
+                                image_data=image_data,
+                                user_phone=from_number,
+                                content_type="image/jpeg",  # Twilio geralmente envia como JPEG
+                                image_type="whatsapp_media"
+                            )
+                            
+                            if image_url:
+                                logger.info(f"📸 Imagem armazenada no Supabase: {image_url}")
+                            else:
+                                logger.warning("⚠️ Falha ao armazenar imagem no Supabase")
+                        else:
+                            logger.error(f"❌ Falha ao baixar imagem: {response.status_code}")
+                            image_data = None
+                except Exception as e:
+                    logger.error(f"❌ Erro ao processar imagem: {e}")
+                    image_data = None
+                    image_url = None
             
             # Processa através do grafo ADK
             graph_result = await bodyflow_graph.process_message(
@@ -65,7 +97,7 @@ async def webhook_whatsapp(request: Request):
         resposta_limpa = _clean_message_for_whatsapp(resposta)
         
         # Registra mensagem recebida e enviada
-        await memory_manager.save_message(from_number, message_body, "inbound")
+        await memory_manager.save_message(from_number, message_body, "inbound", image_url)
         await memory_manager.save_message(from_number, resposta_limpa, "outbound")
         
         logger.info(f"Resposta enviada para {from_number}: {resposta_limpa[:100]}...")

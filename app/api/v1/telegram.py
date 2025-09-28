@@ -17,6 +17,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 
 from app.services.memory import memory_manager
 from app.services.phone_validation import phone_validation_service
+from app.services.image_storage import image_storage_service
 from app.adk.main_graph import bodyflow_graph
 from app.core.config import Config
 from app.core.channels import ChannelConfig
@@ -425,6 +426,7 @@ Use o botão abaixo para compartilhar seu número de forma segura:""")
             image_data = None
             
             # Verifica se há imagem
+            image_url = None
             if photo:
                 content_type = "image"
                 # Usa a foto de maior resolução (última da lista)
@@ -441,6 +443,23 @@ Use o botão abaixo para compartilhar seu número de forma segura:""")
                         image_data = await telegram_bot.download_file(file_info["file_path"])
                         if image_data:
                             logger.info(f"✅ Imagem baixada com sucesso - Tamanho: {len(image_data)} bytes")
+                            
+                            # Faz upload da imagem para o Supabase Storage
+                            try:
+                                image_url = await image_storage_service.upload_image(
+                                    image_data=image_data,
+                                    user_phone=phone_number,
+                                    content_type="image/jpeg",
+                                    image_type="telegram_photo"
+                                )
+                                
+                                if image_url:
+                                    logger.info(f"📸 Imagem armazenada no Supabase: {image_url}")
+                                else:
+                                    logger.warning("⚠️ Falha ao armazenar imagem no Supabase")
+                            except Exception as e:
+                                logger.error(f"❌ Erro ao fazer upload da imagem: {e}")
+                                image_url = None
                         else:
                             logger.error("❌ Falha ao baixar imagem")
                             image_data = None
@@ -465,6 +484,23 @@ Use o botão abaixo para compartilhar seu número de forma segura:""")
                             image_data = await telegram_bot.download_file(file_info["file_path"])
                             if image_data:
                                 logger.info(f"✅ Imagem (documento) baixada com sucesso - Tamanho: {len(image_data)} bytes")
+                                
+                                # Faz upload da imagem para o Supabase Storage
+                                try:
+                                    image_url = await image_storage_service.upload_image(
+                                        image_data=image_data,
+                                        user_phone=phone_number,
+                                        content_type=mime_type,
+                                        image_type="telegram_document"
+                                    )
+                                    
+                                    if image_url:
+                                        logger.info(f"📸 Imagem (documento) armazenada no Supabase: {image_url}")
+                                    else:
+                                        logger.warning("⚠️ Falha ao armazenar imagem (documento) no Supabase")
+                                except Exception as e:
+                                    logger.error(f"❌ Erro ao fazer upload da imagem (documento): {e}")
+                                    image_url = None
                             else:
                                 logger.error("❌ Falha ao baixar imagem (documento)")
                                 image_data = None
@@ -522,7 +558,7 @@ Use o botão abaixo para compartilhar seu número de forma segura:""")
         resposta_limpa = _clean_message_for_telegram(resposta)
         
         # Salva no histórico usando o número de telefone correto
-        await memory_manager.save_message(phone_number, message_text, "inbound")
+        await memory_manager.save_message(phone_number, message_text, "inbound", image_url)
         await memory_manager.save_message(phone_number, resposta_limpa, "outbound")
         
         # Envia resposta via Telegram Bot API

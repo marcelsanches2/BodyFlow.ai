@@ -15,7 +15,7 @@ class MemoryManager:
             Config.SUPABASE_KEY
         )
     
-    async def save_message(self, phone: str, body: str, direction: str) -> bool:
+    async def save_message(self, phone: str, body: str, direction: str, image_url: Optional[str] = None) -> bool:
         """
         Salva uma mensagem no banco de dados
         
@@ -23,6 +23,7 @@ class MemoryManager:
             phone: Número do telefone
             body: Conteúdo da mensagem
             direction: 'inbound' ou 'outbound'
+            image_url: URL da imagem (opcional)
         
         Returns:
             bool: True se salvou com sucesso
@@ -39,7 +40,13 @@ class MemoryManager:
                 "created_at": datetime.utcnow().isoformat()
             }
             
+            # Adiciona image_url se fornecido
+            if image_url:
+                data["image_url"] = image_url
+            
             print(f"💾 MemoryManager: Salvando mensagem - {phone}: {direction} - {truncated_body[:50]}...")
+            if image_url:
+                print(f"📸 MemoryManager: Com imagem: {image_url}")
             
             result = self.supabase.table("messages").insert(data).execute()
             
