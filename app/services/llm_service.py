@@ -1,5 +1,5 @@
 """
-Serviço centralizado para comunicação com LLMs usando LiteLLM
+Serviço centralizado para comunicação com LLMs usando LangChain
 Suporte a múltiplos provedores com fallback automático
 """
 
@@ -7,8 +7,9 @@ import os
 import asyncio
 from typing import Dict, List, Any, Optional
 from dotenv import load_dotenv
-import litellm
-from litellm import completion, acompletion
+from langchain_anthropic import ChatAnthropic
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 
 
 class LLMService:
