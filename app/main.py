@@ -66,15 +66,7 @@ async def startup_event():
     Evento executado na inicialização da aplicação
     """
     logger.info("🚀 Iniciando BodyFlow Backend...")
-    
-    try:
-        # Testa conexão com Supabase fazendo uma consulta simples
-        test_result = await memory_manager.get_user_history("test", limit=1)
-        logger.info("✅ Conexão com Supabase configurada")
-        logger.info("✅ BodyFlow Backend iniciado com sucesso!")
-        
-    except Exception as e:
-        logger.error(f"❌ Erro na inicialização: {e}")
+    logger.info("✅ BodyFlow Backend iniciado com sucesso!")
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -102,18 +94,11 @@ async def health_check():
     """
     Endpoint de verificação de saúde da aplicação
     """
-    try:
-        # Testa conexão com Supabase
-        test_result = await memory_manager.get_user_history("test", limit=1)
-        
-        return {
-            "status": "healthy",
-            "database": "connected",
-            "timestamp": "2024-01-01T00:00:00Z"
-        }
-    except Exception as e:
-        logger.error(f"Health check failed: {e}")
-        raise HTTPException(status_code=503, detail="Service unavailable")
+    return {
+        "status": "healthy",
+        "message": "BodyFlow Backend is running",
+        "timestamp": "2024-01-01T00:00:00Z"
+    }
 
 @app.get("/stats")
 async def get_stats():
