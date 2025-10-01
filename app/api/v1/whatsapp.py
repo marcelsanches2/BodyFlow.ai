@@ -75,9 +75,41 @@ async def webhook_whatsapp(request: Request):
                     image_data = None
                     image_url = None
             
+            # Mapeia número de telefone para user_id correto
+            user_id = await _get_user_id_from_phone(from_number)
+            if not user_id:
+                # Usuário não encontrado - retorna mensagem de cadastro
+                resposta = """🎉 **Bem-vindo ao BodyFlow.ai!**
+
+Sou seu assistente pessoal de fitness e nutrição. Vou te ajudar a criar um plano personalizado para alcançar seus objetivos!
+
+Para começar, você precisa se cadastrar primeiro no nosso site. 
+
+📱 **Acesse:** [bodyflow.ai](https://bodyflow.ai) para criar sua conta
+
+Após o cadastro, volte aqui e eu te ajudarei a completar seu perfil personalizado com:
+• Sua idade, peso e altura
+• Seus objetivos de fitness
+• Seu nível de treino atual
+• Suas restrições alimentares
+
+📸 **Você também poderá enviar fotos de:**
+• 🍽️ **Pratos de comida** → Calculo automático de calorias e nutrientes
+• 📊 **Bioimpedância** → Análise completa da composição corporal
+
+Depois disso, poderei criar planos de treino e dieta totalmente personalizados para você!
+
+🔗 **Cadastre-se em:** bodyflow.ai"""
+                
+                # Cria resposta TwiML
+                twiml_response = MessagingResponse()
+                twiml_response.message(_clean_message_for_whatsapp(resposta))
+                
+                return _create_twiml_response(str(twiml_response))
+            
             # Processa através do grafo ADK
             graph_result = await bodyflow_graph.process_message(
-                user_id=from_number,
+                user_id=user_id,
                 content=message_body,
                 channel="whatsapp",
                 content_type=content_type,
@@ -214,3 +246,34 @@ def _create_error_response(error_message: str):
     twiml_response.message(error_text_clean)
     
     return _create_twiml_response(str(twiml_response))
+
+async def _get_user_id_from_phone(phone_number: str) -> str:
+    """
+    Mapeia número de telefone para user_id (UUID) do usuário
+    
+    Args:
+        phone_number: Número de telefone do WhatsApp (formato Twilio)
+    
+    Returns:
+        str: UUID do usuário ou None se não encontrado
+    """
+    try:
+        # Remove prefixo "whatsapp:" se presente
+        clean_phone = phone_number.replace("whatsapp:", "")
+        
+        # Normaliza o número para busca no banco
+        normalized_phone = memory_manager._normalize_phone_for_search(clean_phone)
+        
+        # Busca usuário no banco
+        user = await memory_manager.get_user_by_phone(normalized_phone)
+        
+        if user:
+            logger.info(f"✅ Usuário encontrado para WhatsApp {phone_number}: {user.get('name', 'N/A')}")
+            return user['id']
+        else:
+            logger.warning(f"❌ Usuário não encontrado para WhatsApp {phone_number}")
+            return None
+            
+    except Exception as e:
+        logger.error(f"❌ Erro ao mapear telefone para user_id: {e}")
+        return None
